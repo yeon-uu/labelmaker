@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>라벨메이커 — 가상 라벨프린터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<main class="page">
+  <h1 class="page-title">라벨메이커</h1>
+  <p class="page-sub">문구를 입력하고 라벨을 뽑아보세요</p>
+
+  <div class="printer" id="printer">
+    <div class="machine-body" id="machineBody">
+
+      <!-- 라벨 출력 슬롯: overflow:hidden 클리핑 컨테이너. 라벨은 이 안에서만 보이며 위로 빠져나온다 -->
+      <div class="machine-slot-clip" id="machineSlotClip" aria-hidden="true">
+        <div class="machine-slot"></div>
+        <div class="label-output" id="labelOutput" aria-live="polite">
+          <canvas id="labelCanvas" class="label-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- LCD 화면 -->
+      <div class="machine-lcd">
+        <div class="lcd-screen" id="lcdScreen" aria-live="polite">
+          <span class="lcd-placeholder" id="lcdPlaceholder">문구를 입력하세요</span>
+        </div>
+      </div>
+
+      <!-- 핑크 원형 출력 버튼 히트존 (이미지에 이미 그려진 버튼 위 투명 오버레이) -->
+      <button type="button" class="print-hitzone" id="printBtn" aria-label="라벨 출력"></button>
+
+      <!-- 온스크린 키보드 패널 (기능키줄 + 자모/기호 그리드 + 하단줄) -->
+      <div class="machine-keyboard" id="keyboard">
+        <!-- JS가 기능키줄 + 두벌식/기호 그리드 + 하단줄을 렌더링 -->
+      </div>
+
+    </div>
+
+    <!-- 실제 키보드 입력을 받는 숨김 input (네이티브 IME 조합용) -->
+    <input
+      type="text"
+      id="hiddenInput"
+      class="hidden-input"
+      aria-label="라벨 문구 입력"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+    >
+  </div>
+
+  <!-- 기기 밖: PNG 저장 버튼 / 음소거 토글만 남김 -->
+  <div class="page-actions">
+    <button type="button" class="mute-btn" id="muteBtn" aria-pressed="false" aria-label="음소거">소리 켜짐</button>
+    <button type="button" class="label-download-btn" id="labelDownloadBtn" hidden>PNG 저장</button>
+  </div>
+
+</main>
+
+<!-- 완성 토스트 -->
+<div class="toast" id="toast" role="status" aria-live="assertive" hidden>완성!</div>
+
+<!-- 글리프 SVG 원본 정의 (렌더/미리보기 공용, 화면에는 보이지 않음) -->
+<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
+  <defs>
+    <!-- 곰 얼굴 -->
+    <g id="glyph-bear">
+      <circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="5" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="19" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="9" cy="12" r="0.9" fill="currentColor"/>
+      <circle cx="15" cy="12" r="0.9" fill="currentColor"/>
+      <path d="M9.5 17c1 1.2 4 1.2 5 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <!-- 딸기 -->
+    <g id="glyph-strawberry">
+      <path d="M12 6c-4.5 0-7.5 4-7.5 8.5C4.5 19 7.8 21 12 21s7.5-2 7.5-6.5C19.5 10 16.5 6 12 6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M12 6l-2-3M12 6l0-3.4M12 6l2-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <circle cx="9" cy="12" r="0.6" fill="currentColor"/>
+      <circle cx="14" cy="12" r="0.6" fill="currentColor"/>
+      <circle cx="11" cy="16" r="0.6" fill="currentColor"/>
+      <circle cx="15" cy="16" r="0.6" fill="currentColor"/>
+      <circle cx="8.5" cy="16.5" r="0.6" fill="currentColor"/>
+    </g>
+    <!-- 네잎클로버 -->
+    <g id="glyph-clover">
+      <path d="M12 12c0-3 -2.5-5-5-4.5c-1.8 0.4-2.8 2.5-1.5 4c1 1.1 4 1.5 6.5 0.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M12 12c0-3 2.5-5 5-4.5c1.8 0.4 2.8 2.5 1.5 4c-1 1.1-4 1.5-6.5 0.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M12 12c-3 0-5 2.5-4.5 5c0.4 1.8 2.5 2.8 4 1.5c1.1-1 1.5-4 0.5-6.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M12 12c3 0 5 2.5 4.5 5c-0.4 1.8-2.5 2.8-4 1.5c-1.1-1-1.5-4-0.5-6.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <line x1="12" y1="12" x2="12" y2="19" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <!-- 하트 -->
+    <g id="glyph-heart">
+      <path d="M12 20C4 15 3 9.5 6.5 7C8.5 5.5 11 6.3 12 8.5C13 6.3 15.5 5.5 17.5 7C21 9.5 20 15 12 20z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </g>
+    <!-- 반짝이 -->
+    <g id="glyph-sparkle">
+      <path d="M13 3c0 4 2 7 7 7c-5 0-7 3-7 7c0-4-2-7-7-7c5 0 7-3 7-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M19 17c0 1.5 0.8 2.5 2.5 2.5c-1.7 0-2.5 1-2.5 2.5c0-1.5-0.8-2.5-2.5-2.5c1.7 0 2.5-1 2.5-2.5z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+    <!-- 리본 -->
+    <g id="glyph-ribbon">
+      <path d="M12 12L4 6c-1 2 0 5 3 6c-3 1-4 4-3 6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M12 12l8-6c1 2 0 5-3 6c3 1 4 4 3 6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="12" cy="12" r="1.6" fill="currentColor"/>
+    </g>
+    <!-- 머그컵 -->
+    <g id="glyph-mug">
+      <path d="M5 8h11v8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M16 9.5h1.5a2.5 2.5 0 0 1 0 5H16" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M8 5.5c0-1 1-1 1-2M11.5 5.5c0-1 1-1 1-2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+    <!-- 별 -->
+    <g id="glyph-star">
+      <path d="M12 3.5l2.5 5.6l6 0.6l-4.5 4l1.3 5.9L12 16.8l-5.3 2.8l1.3-5.9l-4.5-4l6-0.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </g>
+    <!-- 구름 -->
+    <g id="glyph-cloud">
+      <path d="M6.5 16a3.5 3.5 0 0 1 0-7c0.3-2.3 2.2-4 4.5-4c2 0 3.7 1.3 4.3 3.1a3.3 3.3 0 0 1 4.2 3.2c0 1.8-1.5 3.3-3.3 3.3H6.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </g>
+    <!-- 음표 -->
+    <g id="glyph-note">
+      <circle cx="7.5" cy="17.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M10 17.5V5l7-1.5v11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="15" cy="15.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    </g>
+  </defs>
+</svg>
+
+<!-- 라벨 종이 그레인 텍스처용 SVG 필터 (화면 표시용, Canvas는 render.js에서 별도 오프스크린 노이즈 생성) -->
+<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
+  <filter id="paperGrain">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="noise"/>
+    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0"/>
+  </filter>
+</svg>
+
+<script src="js/hangul.js"></script>
+<script src="js/render.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

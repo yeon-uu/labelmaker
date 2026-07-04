@@ -1,0 +1,525 @@
+/* ==========================================================================
+   labelmaker — style.css
+   토큰 출처: docs/design-tokens.md. 이 파일에 없는 색·간격·radius·모션 값 금지.
+   ========================================================================== */
+
+:root {
+  /* 색 */
+  --bg: #FDF6EC;
+  --surface: #FFFFFF;
+  --text: #5B4A3F;
+  --muted: #8C7A6B;
+  --primary: #FFD95A;
+  --accent: #F2909F;
+  --lcd: #DCE8CE;
+  --lcd-text: #4A5240;
+  --tape-white: #FFFFFF;
+  --tape-cream: #FFF3DA;
+  --tape-pink: #FBE3E8;
+  --tape-sky: #DCEBF5;
+  --tape-mint: #DFF0DC;
+  --tape-lavender: #E6E0F2;
+  --ink: #3A3330;
+
+  /* 보더 (저대비 1px 통일) */
+  --border: #E8DFD3;
+
+  /* 간격 (4/8 배수) */
+  --sp-4: 4px;
+  --sp-8: 8px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-24: 24px;
+  --sp-32: 32px;
+  --sp-48: 48px;
+
+  /* radius */
+  --radius-key: 8px;
+  --radius-device: 16px;
+  --radius-label: 3px;
+  --btn-height: 44px;
+  --label-grain-opacity: 0.04;
+
+  /* 모션 */
+  --dur-ui: 150ms;
+  --dur-emph: 300ms;
+  --anim-print: 1400ms;
+  --dur-key: 80ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* 포커스 링: 절대 제거하지 않음. 색만 토큰 값으로 통일 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--sp-24) var(--sp-16) var(--sp-48);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.page-title {
+  font-size: 24px;
+  margin: 0 0 var(--sp-4);
+  text-align: center;
+}
+
+.page-sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 var(--sp-24);
+  text-align: center;
+}
+
+/* ==========================================================================
+   프린터 기기 — 화면에는 기기 하나만. 모든 조작부는 이 안에 절대배치.
+   ========================================================================== */
+
+.printer {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--sp-24);
+}
+
+/* 기기 본체 — machine01.png (알파 투명 컷아웃, 실측 비율 1078:712 ≈ 1.514:1). */
+.machine-body {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1078 / 712;
+  background-image: url('../assets/machine01.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ==========================================================================
+   라벨 출력 슬롯 — overflow:hidden 클리핑. 라벨은 이 컨테이너 안에서만 보이고
+   슬롯 틈 위로 빠져나오는 것처럼 연출한다 (아래 부분은 절대 노출되지 않음).
+   실측: left 19.85% top 8.6% width 60.95%
+   ========================================================================== */
+.machine-slot-clip {
+  position: absolute;
+  left: 19.85%;
+  top: 0%;
+  width: 60.95%;
+  height: 23.46%; /* 핑크 버튼 중심(23.46%)까지, 라벨이 그 위로 자연스럽게 겹치지 않게 */
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 300px;
+}
+
+.machine-slot {
+  position: absolute;
+  left: 0;
+  top: 8.6%;
+  width: 100%;
+  height: 1.4%;
+}
+
+/* 슬롯 바로 위 옅은 접촉 그림자 (라벨이 나오는 틈에 깔리는 그림자 하나) */
+.machine-slot-clip::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  top: 8.6%;
+  width: 84%;
+  height: 6%;
+  background: radial-gradient(ellipse at center, rgba(58, 51, 48, 0.10) 0%, transparent 75%);
+  pointer-events: none;
+}
+
+.label-output {
+  position: absolute;
+  left: 50%;
+  bottom: -100%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+.label-canvas {
+  width: auto;
+  height: auto;
+  max-width: 160px;
+  border-radius: var(--radius-label);
+  box-shadow: 0 2px 6px rgba(58, 51, 48, 0.08);
+  display: none;
+  transform: translateY(0) rotateX(0deg);
+  transform-origin: 50% 100%;
+}
+
+/* ==========================================================================
+   출력 모션 — "감기며 올라오는" 리듬(6~8단계) + 상단 모서리 말림 + 오버슈트.
+   슬롯 아래 있던 라벨이 클리핑 컨테이너 밖에서 시작해 슬롯 틈 안으로만 보이게
+   서서히 올라온다. 단일 ease 대신 계단식 keyframe으로 멈칫거리는 리듬을 만든다.
+   ========================================================================== */
+.label-canvas.is-printing {
+  display: block;
+  animation: print-winch var(--anim-print) cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+@keyframes print-winch {
+  0%   { transform: translateY(230%) rotateX(4deg);  opacity: 0; }
+  4%   { opacity: 1; }
+  12%  { transform: translateY(190%) rotateX(4deg); }
+  13%  { transform: translateY(188%) rotateX(3.6deg); }
+  25%  { transform: translateY(150%) rotateX(3.6deg); }
+  26%  { transform: translateY(148%) rotateX(3.2deg); }
+  38%  { transform: translateY(112%) rotateX(3.2deg); }
+  39%  { transform: translateY(110%) rotateX(2.6deg); }
+  52%  { transform: translateY(78%) rotateX(2.6deg); }
+  53%  { transform: translateY(76%) rotateX(2deg); }
+  66%  { transform: translateY(46%) rotateX(2deg); }
+  67%  { transform: translateY(44%) rotateX(1.2deg); }
+  80%  { transform: translateY(18%) rotateX(0.6deg); }
+  90%  { transform: translateY(-4%) rotateX(0deg); }
+  96%  { transform: translateY(2%) rotateX(0deg); }
+  100% { transform: translateY(0%) rotateX(0deg); opacity: 1; }
+}
+
+/* ==========================================================================
+   라벨 종이 그레인 텍스처 (화면 미리보기용, SVG feTurbulence 필터 오버레이)
+   ========================================================================== */
+.label-canvas {
+  position: relative;
+}
+
+.label-output::before {
+  content: '';
+}
+
+/* ==========================================================================
+   기기 본체 흔들림(wobble) — 인쇄 사운드(드르륵)의 6~8스텝 타이밍과 동기화.
+   회전 ±1.5deg + 이동 ±2px, transform만 사용(레이아웃 불변).
+   ========================================================================== */
+.machine-body.is-shaking {
+  animation: machine-wobble var(--anim-print) ease-out;
+  transform-origin: 50% 100%;
+}
+
+@keyframes machine-wobble {
+  0%   { transform: translateX(0) rotate(0deg); }
+  12%  { transform: translateX(-2px) rotate(-1.5deg); }
+  25%  { transform: translateX(2px) rotate(1.5deg); }
+  38%  { transform: translateX(-2px) rotate(-1.2deg); }
+  52%  { transform: translateX(2px) rotate(1deg); }
+  66%  { transform: translateX(-1px) rotate(-0.6deg); }
+  80%  { transform: translateX(1px) rotate(0.4deg); }
+  90%  { transform: translateX(0) rotate(0deg); }
+  100% { transform: translateX(0) rotate(0deg); }
+}
+
+/* ==========================================================================
+   LCD 화면 — 실측: left 26.44% top 16.15% width 47.40% height 15.17%
+   ========================================================================== */
+.machine-lcd {
+  position: absolute;
+  left: 26.44%;
+  top: 16.15%;
+  width: 47.40%;
+  height: 15.17%;
+  z-index: 2;
+}
+
+.lcd-screen {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: var(--lcd-text);
+  border-radius: var(--sp-4);
+  border: none;
+  padding: 0 var(--sp-8);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.lcd-placeholder {
+  color: var(--lcd-text);
+  opacity: 0.5;
+  font-size: 13px;
+}
+
+.lcd-glyph {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  vertical-align: middle;
+  color: var(--lcd-text);
+}
+
+.lcd-glyph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.lcd-settings-label {
+  font-weight: 700;
+}
+
+.lcd-settings-value {
+  margin-left: var(--sp-4);
+}
+
+/* ==========================================================================
+   핑크 원형 출력 버튼 히트존 — 이미지에 이미 그려진 버튼 위 투명 오버레이.
+   실측: 중심 (87.48%, 23.46%), 지름 11.87% (몸체 기준)
+   ========================================================================== */
+.print-hitzone {
+  position: absolute;
+  left: calc(87.48% - 11.87% / 2);
+  top: calc(23.46% - 11.87% / 2);
+  width: 11.87%;
+  height: 11.87%;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  z-index: 3;
+  transition: filter var(--dur-ui) ease, outline-color var(--dur-ui) ease;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.print-hitzone:hover {
+  filter: brightness(1.12);
+}
+
+.print-hitzone:active {
+  filter: brightness(0.94);
+}
+
+.print-hitzone:focus-visible {
+  outline-color: var(--accent);
+}
+
+/* ==========================================================================
+   온스크린 키보드 패널 — 실측 하단 빈 패널:
+   left 0.83% top 32.30% width 93.60% height 36.94%
+   기능키줄(MODE/방향키) + 자모(또는 기호) 그리드 + 하단줄(쌍자음/기호토글/스페이스/지우기)
+   ========================================================================== */
+.machine-keyboard {
+  position: absolute;
+  left: 0.83%;
+  top: 32.30%;
+  width: 93.60%;
+  height: 36.94%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 2px 4px;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+.kb-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 키 시각 크기는 컴팩트(36~40px)하되, 히트 영역은 padding으로 44px 이상 확보 */
+.kb-key {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border-radius: var(--radius-key);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform var(--dur-key) ease, filter var(--dur-key) ease;
+}
+
+/* 투명 확장 히트 영역: 시각 크기(36px)보다 위아래 4px씩 더 넓게 클릭 영역 확보 → 44px */
+.kb-key::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.kb-key:active,
+.kb-key.is-pressed {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+}
+
+.kb-key.kb-key-shift.is-active {
+  background: var(--primary);
+}
+
+.kb-key-space {
+  flex: 4;
+  font-size: 12px;
+}
+
+.kb-key-wide {
+  flex: 1.5;
+  font-size: 11px;
+}
+
+.kb-key-func {
+  height: 30px;
+  font-size: 13px;
+  flex: 1;
+}
+
+.kb-row-func {
+  flex: 0 0 auto;
+  min-height: 30px;
+}
+
+/* ==========================================================================
+   숨김 input (네이티브 IME 조합용) — 시각적으로만 감추고 focus/기능 유지
+   ========================================================================== */
+
+.hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   기기 밖 UI — 페이지 타이틀 / PNG 저장 버튼 / 음소거 토글만
+   ========================================================================== */
+
+.page-actions {
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  margin-top: var(--sp-16);
+}
+
+.mute-btn {
+  height: var(--btn-height);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-key);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+  transition: filter var(--dur-ui) ease;
+}
+
+.mute-btn:hover {
+  filter: brightness(0.97);
+}
+
+.mute-btn[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.label-download-btn {
+  height: var(--btn-height);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-key);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  transition: transform var(--dur-ui) ease, filter var(--dur-ui) ease;
+}
+
+.label-download-btn:hover {
+  filter: brightness(0.97);
+}
+
+.label-download-btn:active {
+  transform: scale(0.96);
+}
+
+/* ==========================================================================
+   토스트
+   ========================================================================== */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--sp-32);
+  transform: translateX(-50%) translateY(var(--sp-16));
+  background: var(--text);
+  color: var(--surface);
+  padding: var(--sp-12) var(--sp-24);
+  border-radius: var(--radius-key);
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity var(--dur-emph) ease, transform var(--dur-emph) ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ==========================================================================
+   반응형 — 375px에서 가로 스크롤 없음
+   ========================================================================== */
+
+@media (max-width: 400px) {
+  .page {
+    padding: var(--sp-16) var(--sp-12) var(--sp-32);
+  }
+
+  .machine-body {
+    max-width: 100%;
+  }
+
+  .kb-key {
+    font-size: 13px;
+  }
+
+  .kb-key-space {
+    font-size: 11px;
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "labelmaker-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", "-l", "5941", "D:\\dev\\labelmaker"],
+      "port": 5941
+    }
+  ]
+}
