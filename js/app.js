@@ -9,6 +9,15 @@
  * 각 키 히트존 중심 픽셀이 실제 키캡 위에 있는지 자동 검산해 100% 통과를 확인했다(스크립트는
  * 1회성 도구라 저장하지 않음, 결과는 docs/DEVLOG.md 참고). kr/en 두 챠시는 오벌/행 위치가
  * %로 사실상 동일함을 크롭 비교로 재확인해 R1/R5는 공용 좌표를 사용한다.
+ *
+ * 2026-07-05(12차) — kr_trim.png를 새 소스 이미지(assets/한글머신오류고침.png)로 교체.
+ * 알파채널 없는 RGB라 배경색(크림) 거리 기반으로 몸체 bbox를 트림(1109x794, 기존 1096x792과
+ * 유사 크기). R1~R5 좌표 전부 이 새 이미지 기준으로 완전 재측정(기존 kr 좌표 재사용 안 함,
+ * 행 밴드는 노란 데크 vs 크림 키캡 B채널 다수결 스캔, 열 밴드는 각 행 안에서 좌우 프레임
+ * 경계 실측 후 실제 칸 수로 균등분할 — 오버레이 렌더로 각 키 중심이 키캡 위에 오는지 육안
+ * 재검증 완료). 새 이미지는 R2에 ㅔ 키가 실제로 존재(기존 이미지엔 없어 ㅔ/ㅖ 미지원이었음),
+ * R4는 콤마가 2개(둘 다 ','로 매핑, 실제 사진 그대로). LCD 초록칸 위치·크기가 기존 대비 크게
+ * 달라(top 6.944%→12.406%, height 30.303%→12.531%) css/style.css의 .machine-lcd도 갱신함.
  */
 (function () {
   'use strict';
@@ -47,21 +56,22 @@
   // 각 키: { rect, key } — key는 논리 동작 식별자.
   // --------------------------------------------------------------------
 
-  // R1(11칸: 숫자 1~0 + 삭제/취소) — kr/en 공통(픽셀 스캔, 위치 사실상 동일 재확인).
+  // R1(11칸: 숫자 1~0 + 삭제/취소) — 2026-07-05(12차) 새 kr_trim.png(1109x794) 균등분할 실측
+  // (좌 58.5px ~ 우 1051.0px 프레임 안쪽을 11등분, 오버레이 육안 검증 완료).
   const R1_RECTS = [
-    { left: 6.204, width: 7.117 },
-    { left: 14.051, width: 7.664 },
-    { left: 23.084, width: 6.934 },
-    { left: 30.566, width: 7.482 },
-    { left: 38.686, width: 7.299 },
-    { left: 46.624, width: 7.391 },
-    { left: 54.653, width: 7.299 },
-    { left: 62.682, width: 7.208 },
-    { left: 71.259, width: 6.661 },
-    { left: 79.106, width: 6.661 },
-    { left: 87.044, width: 6.387 }
+    { left: 5.275, width: 8.136 },
+    { left: 13.411, width: 8.136 },
+    { left: 21.547, width: 8.136 },
+    { left: 29.683, width: 8.136 },
+    { left: 37.819, width: 8.136 },
+    { left: 45.955, width: 8.136 },
+    { left: 54.090, width: 8.136 },
+    { left: 62.226, width: 8.136 },
+    { left: 70.362, width: 8.136 },
+    { left: 78.498, width: 8.136 },
+    { left: 86.634, width: 8.136 }
   ];
-  const R1_TOP = 41.162, R1_H = 8.838;
+  const R1_TOP = 40.554, R1_H = 9.950;
   const R1_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'del_cancel'];
 
   function buildRow(rects, top, height, keys) {
@@ -74,35 +84,37 @@
   const R1 = buildRow(R1_RECTS, R1_TOP, R1_H, R1_KEYS);
 
   // ---- 한글 레이어 ----
-  // R2(10칸): ㅂㅈㄷㄱㅅㅛㅕㅑㅐ(9자모, 실측상 ㅔ는 이 기기에 없음) + 이모티콘
+  // 2026-07-05(12차) 새 kr_trim.png 실측: R2/R4는 좌 58.5px~우 1051.0px 프레임을 11등분,
+  // R3는 10등분(오버레이 육안 검증 완료, docs/DEVLOG.md 12차 참고).
+  // R2(11칸): ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ(10자모, 새 이미지엔 ㅔ가 실제로 있음) + 이모티콘
   const R2_KR_RECTS = [
-    { left: 5.839, width: 7.755 }, { left: 14.964, width: 7.482 }, { left: 23.084, width: 8.303 },
-    { left: 32.026, width: 8.212 }, { left: 40.785, width: 8.303 }, { left: 49.818, width: 8.212 },
-    { left: 59.398, width: 7.573 }, { left: 68.248, width: 7.482 }, { left: 76.642, width: 8.029 },
-    { left: 85.949, width: 7.482 }
+    { left: 5.275, width: 8.136 }, { left: 13.411, width: 8.136 }, { left: 21.547, width: 8.136 },
+    { left: 29.683, width: 8.136 }, { left: 37.819, width: 8.136 }, { left: 45.955, width: 8.136 },
+    { left: 54.090, width: 8.136 }, { left: 62.226, width: 8.136 }, { left: 70.362, width: 8.136 },
+    { left: 78.498, width: 8.136 }, { left: 86.634, width: 8.136 }
   ];
-  const R2_KR_KEYS = ['ㅂ', 'ㅈ', 'ㄷ', 'ㄱ', 'ㅅ', 'ㅛ', 'ㅕ', 'ㅑ', 'ㅐ', 'emoji'];
-  const R2_KR = buildRow(R2_KR_RECTS, 51.768, 7.449, R2_KR_KEYS);
+  const R2_KR_KEYS = ['ㅂ', 'ㅈ', 'ㄷ', 'ㄱ', 'ㅅ', 'ㅛ', 'ㅕ', 'ㅑ', 'ㅐ', 'ㅔ', 'emoji'];
+  const R2_KR = buildRow(R2_KR_RECTS, 51.511, 8.438, R2_KR_KEYS);
 
   // R3(10칸): ㅁㄴㅇㄹㅎㅗㅓㅏㅣ(9자모) + BS
   const R3_KR_RECTS = [
-    { left: 6.478, width: 7.117 }, { left: 14.325, width: 8.212 }, { left: 23.175, width: 8.212 },
-    { left: 32.026, width: 8.212 }, { left: 41.058, width: 8.120 }, { left: 49.909, width: 8.120 },
-    { left: 59.398, width: 7.482 }, { left: 68.248, width: 7.482 }, { left: 77.099, width: 7.573 },
-    { left: 85.949, width: 7.482 }
+    { left: 5.275, width: 8.950 }, { left: 14.225, width: 8.950 }, { left: 23.174, width: 8.950 },
+    { left: 32.124, width: 8.950 }, { left: 41.073, width: 8.950 }, { left: 50.023, width: 8.950 },
+    { left: 58.972, width: 8.950 }, { left: 67.922, width: 8.950 }, { left: 76.871, width: 8.950 },
+    { left: 85.821, width: 8.950 }
   ];
   const R3_KR_KEYS = ['ㅁ', 'ㄴ', 'ㅇ', 'ㄹ', 'ㅎ', 'ㅗ', 'ㅓ', 'ㅏ', 'ㅣ', 'backspace'];
-  const R3_KR = buildRow(R3_KR_RECTS, 60.985, 7.449, R3_KR_KEYS);
+  const R3_KR = buildRow(R3_KR_RECTS, 60.957, 8.438, R3_KR_KEYS);
 
-  // R4(10칸): Shift ㅋㅌㅊㅍㅠㅜㅡ , .
+  // R4(11칸): Shift ㅋㅌㅊㅍㅠㅜㅡ , , . (실측 결과 콤마가 실제로 2개, 사진 그대로 매핑)
   const R4_KR_RECTS = [
-    { left: 6.478, width: 8.303 }, { left: 15.420, width: 7.847 }, { left: 23.905, width: 8.029 },
-    { left: 32.573, width: 7.938 }, { left: 41.788, width: 7.391 }, { left: 49.909, width: 7.938 },
-    { left: 58.942, width: 7.664 }, { left: 67.974, width: 7.391 }, { left: 76.095, width: 8.303 },
-    { left: 85.675, width: 7.847 }
+    { left: 5.275, width: 8.136 }, { left: 13.411, width: 8.136 }, { left: 21.547, width: 8.136 },
+    { left: 29.683, width: 8.136 }, { left: 37.819, width: 8.136 }, { left: 45.955, width: 8.136 },
+    { left: 54.090, width: 8.136 }, { left: 62.226, width: 8.136 }, { left: 70.362, width: 8.136 },
+    { left: 78.498, width: 8.136 }, { left: 86.634, width: 8.136 }
   ];
-  const R4_KR_KEYS = ['shift', 'ㅋ', 'ㅌ', 'ㅊ', 'ㅍ', 'ㅠ', 'ㅜ', 'ㅡ', ',', '.'];
-  const R4_KR = buildRow(R4_KR_RECTS, 70.202, 7.449, R4_KR_KEYS);
+  const R4_KR_KEYS = ['shift', 'ㅋ', 'ㅌ', 'ㅊ', 'ㅍ', 'ㅠ', 'ㅜ', 'ㅡ', ',', ',', '.'];
+  const R4_KR = buildRow(R4_KR_RECTS, 70.277, 8.438, R4_KR_KEYS);
 
   // ---- 영문 레이어 ----
   // R2(11칸): QWERTYUIOP + 이모티콘(기존 Symbol 키를 이모지 레이어 토글로 재사용)
@@ -135,24 +147,30 @@
   const R4_EN_KEYS = ['shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '-', ',', '.'];
   const R4_EN = buildRow(R4_EN_RECTS, 69.494, 8.481, R4_EN_KEYS);
 
-  // R5(6칸, 한글/영문 공통 구조: 한영·Space·◀·▲▼·▶·선택줄변경)
+  // R5(6그룹, 한글/영문/이모지 공용: 한영·Space·◀·▲▼·▶·선택줄변경).
+  // 2026-07-05(12차) 새 kr_trim.png 실측 — ▲/▼는 원래 이미지에서도 세로로 분리된 별개
+  // 버튼이라 겹치지 않지만(각자 그려진 위치가 이미 분리돼 있음), 히트존도 정확히 그 위에
+  // 각자 배치해 재확인(위: top 79.219~83.879%, 아래: top 85.139~89.798%, 사이 gap 1.26%p).
+  const R5_TOP = 79.849, R5_H = 9.950;
   const R5_RECTS = [
-    { left: 14.690, width: 8.394, key: 'lang_toggle' },
-    { left: 24.726, width: 26.642, key: 'space' },
-    { left: 53.011, width: 7.208, key: 'left' },
-    { left: 61.861, width: 6.752, upDown: true },
-    { left: 70.073, width: 7.299, key: 'right' },
-    { left: 78.923, width: 14.507, key: 'enter' }
+    { left: 5.320, width: 17.854, key: 'lang_toggle' },
+    { left: 24.707, width: 26.781, key: 'space' },
+    { left: 53.021, width: 8.656, key: 'left' },
+    { left: 61.858, width: 6.853, upDown: true },
+    { left: 70.243, width: 8.656, key: 'right' },
+    { left: 79.080, width: 15.690, key: 'enter' }
   ];
-  const R5_TOP = 80.051, R5_H = 6.187;
+  const UP_TOP = 79.219, UP_H = 4.660;
+  const DOWN_TOP = 85.139, DOWN_H = 4.660;
 
   function buildR5() {
     const out = [];
     for (const r of R5_RECTS) {
       if (r.upDown) {
-        // 세로 2단(▲/▼)이 같은 칸에 있음 -> 위/아래 절반으로 분리
-        out.push({ rect: { left: r.left, top: R5_TOP, width: r.width, height: R5_H / 2 }, key: 'up' });
-        out.push({ rect: { left: r.left, top: R5_TOP + R5_H / 2, width: r.width, height: R5_H / 2 }, key: 'down' });
+        // ▲/▼는 사진에서 이미 세로로 분리된 별개 버튼 — 히트존도 각자 실측 rect로 분리해
+        // 절대 겹치지 않게 한다(기존 버그: 칸 절반으로 기계적 분할해 실제 버튼 위치와 안 맞았음).
+        out.push({ rect: { left: r.left, top: UP_TOP, width: r.width, height: UP_H }, key: 'up' });
+        out.push({ rect: { left: r.left, top: DOWN_TOP, width: r.width, height: DOWN_H }, key: 'down' });
       } else {
         out.push({ rect: { left: r.left, top: R5_TOP, width: r.width, height: R5_H }, key: r.key });
       }
@@ -416,7 +434,9 @@
   // Shift: 한글 = 다음 입력 쌍자음/ㅒㅖ 전환, 영문 = 대소문자 토글
   // --------------------------------------------------------------------
   const DOUBLE_CONSONANT = { 'ㅂ': 'ㅃ', 'ㅈ': 'ㅉ', 'ㄷ': 'ㄸ', 'ㄱ': 'ㄲ', 'ㅅ': 'ㅆ' };
-  const SHIFT_VOWEL = { 'ㅐ': 'ㅒ' }; // 이 기기에는 ㅔ 키가 없어 ㅖ 전환은 지원하지 않음(정직한 한계)
+  // 2026-07-05(12차): 새 kr_trim.png에는 ㅔ 키가 실제로 존재해 ㅖ 전환도 지원 추가
+  // (hangul.js의 JUNG 배열에 'ㅖ'가 이미 있어 조합 자체는 기존부터 지원됨, 키 매핑만 추가).
+  const SHIFT_VOWEL = { 'ㅐ': 'ㅒ', 'ㅔ': 'ㅖ' };
 
   function shiftJamo(jamo) {
     if (!state.shift) return jamo;
