@@ -13,7 +13,7 @@
 - **목적**: 인터랙티브 프론트엔드 연습 + 배포 경험
 - **스택**: Vanilla HTML/CSS/JS · Canvas · Web Audio API (빌드 도구·서버·외부 API 없음)
 
-<img src="docs/img/labelmaker-device.png" width="520" alt="라벨메이커 기기">
+<img src="docs/img/labelmaker-hero.png" width="480" alt="라벨메이커 기기">
 
 *화면 중앙의 라벨프린터 하나로 모든 조작 — 키보드·설정·출력이 기기 안에서 이뤄진다.*
 
@@ -29,7 +29,9 @@
 → 슬롯에서 라벨이 영수증처럼 올라옴 → PNG 저장
 ```
 
-*도트 폰트로 찍혀 나오는 라벨 스티커 — 테이프색 · 프레임 · 이모지가 반영된 투명 배경 PNG로 저장됩니다.*
+<img src="docs/img/labelmaker-output.png" width="480" alt="출력된 라벨 예시">
+
+*이모지 자판으로 문구와 이모지를 섞어 찍으면, 도트 폰트 라벨이 슬롯에서 영수증처럼 올라온다 (멀티라인 자동 줄바꿈).*
 
 ## 주요 기능
 
