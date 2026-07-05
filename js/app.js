@@ -88,30 +88,30 @@
   // R3는 10등분(오버레이 육안 검증 완료, docs/DEVLOG.md 12차 참고).
   // R2(11칸): ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ(10자모, 새 이미지엔 ㅔ가 실제로 있음) + 이모티콘
   const R2_KR_RECTS = [
-    { left: 5.275, width: 8.136 }, { left: 13.411, width: 8.136 }, { left: 21.547, width: 8.136 },
-    { left: 29.683, width: 8.136 }, { left: 37.819, width: 8.136 }, { left: 45.955, width: 8.136 },
-    { left: 54.090, width: 8.136 }, { left: 62.226, width: 8.136 }, { left: 70.362, width: 8.136 },
-    { left: 78.498, width: 8.136 }, { left: 86.634, width: 8.136 }
+    { left: 6.58, width: 7.03 }, { left: 15.24, width: 6.76 }, { left: 23.53, width: 6.76 },
+    { left: 31.74, width: 6.76 }, { left: 39.95, width: 6.67 }, { left: 48.15, width: 6.67 },
+    { left: 56.27, width: 6.31 }, { left: 63.93, width: 6.31 }, { left: 71.60, width: 6.22 },
+    { left: 79.17, width: 6.31 }, { left: 86.65, width: 6.94 }
   ];
   const R2_KR_KEYS = ['ㅂ', 'ㅈ', 'ㄷ', 'ㄱ', 'ㅅ', 'ㅛ', 'ㅕ', 'ㅑ', 'ㅐ', 'ㅔ', 'emoji'];
   const R2_KR = buildRow(R2_KR_RECTS, 51.511, 8.438, R2_KR_KEYS);
 
   // R3(10칸): ㅁㄴㅇㄹㅎㅗㅓㅏㅣ(9자모) + BS
   const R3_KR_RECTS = [
-    { left: 5.275, width: 8.950 }, { left: 14.225, width: 8.950 }, { left: 23.174, width: 8.950 },
-    { left: 32.124, width: 8.950 }, { left: 41.073, width: 8.950 }, { left: 50.023, width: 8.950 },
-    { left: 58.972, width: 8.950 }, { left: 67.922, width: 8.950 }, { left: 76.871, width: 8.950 },
-    { left: 85.821, width: 8.950 }
+    { left: 6.58, width: 7.12 }, { left: 15.24, width: 6.85 }, { left: 23.62, width: 6.67 },
+    { left: 31.83, width: 6.67 }, { left: 39.95, width: 6.67 }, { left: 48.06, width: 6.67 },
+    { left: 56.18, width: 6.40 }, { left: 63.93, width: 6.31 }, { left: 71.51, width: 6.31 },
+    { left: 79.17, width: 6.22 }, { left: 86.56, width: 7.03 }
   ];
-  const R3_KR_KEYS = ['ㅁ', 'ㄴ', 'ㅇ', 'ㄹ', 'ㅎ', 'ㅗ', 'ㅓ', 'ㅏ', 'ㅣ', 'backspace'];
+  const R3_KR_KEYS = ['ㅁ', 'ㄴ', 'ㅇ', 'ㄹ', 'ㅎ', 'ㅗ', 'ㅓ', 'ㅏ', 'ㅏ', 'ㅣ', 'backspace'];
   const R3_KR = buildRow(R3_KR_RECTS, 60.957, 8.438, R3_KR_KEYS);
 
   // R4(11칸): Shift ㅋㅌㅊㅍㅠㅜㅡ , , . (실측 결과 콤마가 실제로 2개, 사진 그대로 매핑)
   const R4_KR_RECTS = [
-    { left: 5.275, width: 8.136 }, { left: 13.411, width: 8.136 }, { left: 21.547, width: 8.136 },
-    { left: 29.683, width: 8.136 }, { left: 37.819, width: 8.136 }, { left: 45.955, width: 8.136 },
-    { left: 54.090, width: 8.136 }, { left: 62.226, width: 8.136 }, { left: 70.362, width: 8.136 },
-    { left: 78.498, width: 8.136 }, { left: 86.634, width: 8.136 }
+    { left: 6.76, width: 8.03 }, { left: 16.23, width: 6.49 }, { left: 24.17, width: 6.40 },
+    { left: 32.01, width: 6.49 }, { left: 39.95, width: 6.67 }, { left: 48.06, width: 6.58 },
+    { left: 56.09, width: 6.40 }, { left: 63.93, width: 6.22 }, { left: 71.51, width: 6.31 },
+    { left: 79.08, width: 6.22 }, { left: 86.56, width: 7.03 }
   ];
   const R4_KR_KEYS = ['shift', 'ㅋ', 'ㅌ', 'ㅊ', 'ㅍ', 'ㅠ', 'ㅜ', 'ㅡ', ',', ',', '.'];
   const R4_KR = buildRow(R4_KR_RECTS, 70.277, 8.438, R4_KR_KEYS);
