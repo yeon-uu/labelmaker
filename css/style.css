@@ -108,10 +108,21 @@ button {
   position: relative;
 }
 
+/* 타이틀 "Label Maker" — PNG 저장 버튼(.label-download-btn)과 같은 톤의 귀여운
+   도트폰트 칩/배지. 클릭 기능 없는 순수 장식(h1 자체를 pill로 스타일링). */
 .page-title {
-  font-size: 24px;
+  display: inline-block;
   margin: 0 0 var(--sp-24);
+  padding: var(--sp-8) var(--sp-24);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--tape-cream);
+  color: var(--text);
+  font-family: 'Galmuri11', 'NeoDunggeunmo', 'DungGeunMo', 'DotGothic16', monospace;
+  font-size: 16px;
+  font-weight: 400;
   text-align: center;
+  letter-spacing: 0.02em;
 }
 
 /* 음소거 아이콘 토글: 그려진 큰 버튼 없이 페이지 구석의 작은 아이콘 하나 */
@@ -344,17 +355,20 @@ button {
   background: transparent;
   color: var(--lcd-text);
   border: none;
-  padding: 0 var(--sp-12);
+  /* 상하좌우 여백을 명시적으로 확보(기존엔 좌우만 --sp-12, 위아래는 flex 중앙정렬에만
+     의존해 글자 박스가 초록칸 상하 경계에 살짝 닿았다). box-sizing:border-box(전역 *)라
+     padding만큼 content 영역(텍스트가 실제로 흐르는 폭/높이)이 초록칸 안쪽으로 줄어든다. */
+  padding: var(--sp-8) var(--sp-16);
   display: flex;
   align-items: center;
   overflow: hidden;
   font-family: 'Galmuri11', 'NeoDunggeunmo', 'DungGeunMo', 'DotGothic16', monospace;
-  /* 초록칸 실제 높이의 약 33% 내외로 재축소(기존 6cqw는 초록칸 위아래 경계에 살짝 닿는
-     em-box 여백 문제가 있었음). .machine이 container-type:inline-size라 cqw 단위가
-     기기 자체 폭(뷰포트가 아니라)에 비례해 스케일된다.
-     5cqw ≈ 기기 520px 기준 26px — 위아래 여백을 확보하면서도 가로 글자 수는 6~7자 유지.
-     preview_eval로 텍스트 rect가 LCD rect 안쪽 여백을 두고 포함됨을 재검증한다. */
-  font-size: 5cqw;
+  /* 초록칸 실제 높이 대비 더 작게(5cqw→4cqw) 줄여, 위아래 padding(--sp-8)과 함께
+     텍스트/커서 rect가 초록칸 안쪽에 상하좌우 여백을 두고 완전히 들어가게 한다.
+     .machine이 container-type:inline-size라 cqw 단위가 기기 자체 폭에 비례해 스케일된다.
+     4cqw ≈ 기기 520px 기준 20.8px. preview_eval로 텍스트/커서 rect가 LCD rect 안쪽에
+     상하좌우 각각 여백을 두고 완전히 포함됨을 재검증한다. */
+  font-size: 4cqw;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -590,6 +604,14 @@ button {
   height: 100%;
   object-fit: contain;
   image-rendering: pixelated;
+}
+
+/* R4 중복 이모지 키(리본/반짝이/꽃/곰/고양이/토끼/딸기/구름)로 삽입된 이모지는
+   R2/R3의 보통 크기 대비 약 65% 축소된 "미니" 사이즈로 표시한다(줄 높이 em 기준,
+   세로 정렬은 부모 lcd-track의 align-items:center를 그대로 따름). */
+.lcd-emoji--mini {
+  width: 0.65em;
+  height: 0.65em;
 }
 
 /* ==========================================================================

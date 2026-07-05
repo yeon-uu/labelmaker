@@ -39,6 +39,9 @@
   // 라벨 출력물 전용 폰트: 도트 픽셀폰트 Galmuri11(LCD와 동일). Jua/Gaegu는 더 이상 쓰지 않는다.
   // 폴백 체인은 LCD와 동일하게 맞춰 로드 실패 시에도 도트/모노스페이스 느낌을 유지한다.
   const LABEL_FONT_STACK = '"Galmuri11", "NeoDunggeunmo", "DungGeunMo", "DotGothic16", monospace';
+  // R4 중복 이모지 키(리본/반짝이/꽃/곰/고양이/토끼/딸기/구름)로 삽입된 이모지는
+  // 보통 크기(glyphSize) 대비 이 비율로 축소해 그린다(LCD의 .lcd-emoji--mini와 동일 비율).
+  const EMOJI_MINI_SCALE = 0.65;
 
   // 토큰을 렌더 가능한 조각(문자 또는 glyph) 단위로 펼치되, "어절" 경계(공백/개행 뒤)를
   // 표시해 줄바꿈 계산 시 어절 단위 우선 분리가 가능하게 한다.
@@ -61,7 +64,7 @@
       } else if (tok.type === 'glyph') {
         pieces.push({ type: 'glyph', id: tok.id });
       } else if (tok.type === 'emoji') {
-        pieces.push({ type: 'emoji', id: tok.id });
+        pieces.push({ type: 'emoji', id: tok.id, size: tok.size });
       }
     }
     return pieces;
@@ -89,8 +92,14 @@
     return words;
   }
 
+  function emojiRenderSize(piece, glyphSize) {
+    return piece.size === 'mini' ? glyphSize * EMOJI_MINI_SCALE : glyphSize;
+  }
+
   function pieceWidth(ctx, piece, glyphSize) {
-    return piece.type === 'char' ? ctx.measureText(piece.value).width : glyphSize + 6;
+    if (piece.type === 'char') return ctx.measureText(piece.value).width;
+    if (piece.type === 'emoji') return emojiRenderSize(piece, glyphSize) + 6;
+    return glyphSize + 6;
   }
 
   function wordWidth(ctx, word, glyphSize) {
@@ -266,10 +275,12 @@
           x += glyphSize + 6;
         } else if (piece.type === 'emoji') {
           const img = emojiImages[piece.id];
+          const renderSize = emojiRenderSize(piece, glyphSize);
           if (img) {
-            ctx.drawImage(img, x, y - glyphSize / 2, glyphSize, glyphSize);
+            // 세로 정렬은 줄 baseline(y) 기준 중앙 유지 — 미니 사이즈도 같은 y 중심으로 축소만 된다.
+            ctx.drawImage(img, x, y - renderSize / 2, renderSize, renderSize);
           }
-          x += glyphSize + 6;
+          x += renderSize + 6;
         }
       }
       y += lineHeight;

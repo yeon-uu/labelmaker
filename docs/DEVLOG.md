@@ -1,5 +1,48 @@
 # DEVLOG — labelmaker
 
+## 2026-07-05(10차) — LCD 여백 확대 / 이모지-키보드 매핑 오류 수정(리본 증발 버그) / R4 미니 사이즈 / 타이틀 칩 스타일
+
+### 1. LCD 텍스트 여백 확대
+`.lcd-screen`의 padding을 `0 var(--sp-12)`(좌우만)에서 `var(--sp-8) var(--sp-16)`(상하좌우)로 변경, font-size를 `5cqw→4cqw`로 축소해 텍스트/커서 rect가 초록칸(LCD) 상하좌우 경계에 여백을 두고 완전히 포함되게 했다. 세로 중앙 정렬(`align-items:center`)은 유지.
+- 검증(데스크톱): "안녕" 짧은 텍스트 — 좌 16px/상 43.3px/하 43.6px 여백으로 완전 포함. 가로 스크롤이 우측 끝까지 찬 긴 텍스트(숫자 20자) — 커서 우측 여백 19.8px/상 52.6px/하 43.6px 여백으로 완전 포함.
+- 검증(375px): "안녕" — 좌 16px/상 28.7px/하 28.8px 여백으로 완전 포함.
+- settings/confirm 모드(`is-modal`, 3cqw 폰트)도 데스크톱/375px 둘 다 LCD 안쪽에 완전 포함 재확인.
+
+### 2. 이모지-키보드 매핑 오류 수정 — "리본 키 증발" 버그 발견 및 수정
+`assets/emoji-sheet.png`(3행: 9+8+8, 마지막 2개 콤마/마침표 제외)와 `assets/머신이모티콘.png`(R2/R3/R4)를 나란히 육안 대조하고, `R2_KR_RECTS` 각 rect에 좌우 경계선을 그려 실제 키캡 사진 위에 겹쳐(`getBoundingClientRect` 방식이 아니라 Python PIL로 그리드 오버레이 이미지를 만들어 1:1 육안 대조) 실제 키-그림-스프라이트 대응을 재확정했다.
+- **핵심 발견**: 기존 코드(9차 세션)는 R2의 반짝이를 "3칸"(sparkle_big/sparkle_pair/sparkle_small)으로 착각해 9번째 자리를 반짝이로 채웠는데, 실제 사진은 반짝이가 **2종뿐**(7번째=큰다이아 단독, 8번째=큰+작은 쌍)이고 **9번째는 리본**이었다. 그 결과 `R2_EMOJI[R2_EMOJI.length-1] = {key:'emoji'}` 코드가 (반짝이로 잘못 채워 넣은) 배열의 마지막 요소를 "가나다 복귀" 토글로 덮어썼는데, 실제로는 그 마지막 요소가 이미 리본이었으므로 **리본 키가 완전히 사라지고 클릭하면 이모티콘 복귀 동작이 실행되는 상태**였다(10번째 칸 자체는 원래도 정확히 "이모티콘" 복귀 라벨이 그려진 자리라 별도 칸이 필요했던 게 아니라, 9번째 배열 값이 잘못됐던 것).
+- **스프라이트 실체 재확인**(파일명과 내부 도형 불일치, 육안 확인): `sparkle_pair.png`(112×127)=큰다이아 **단독** 모양, `sparkle_small.png`(98×94)=큰+작은 **쌍** 모양, `sparkle_big.png`(137×117)=큰+작은 2개(3점 조합)—이 키보드 어디에도 없는 모양이라 최종적으로 미사용.
+- **수정**: `R2_EMOJI_KEYS`를 9개 이모지(bear~ribbon) + 10번째 `'emoji'`(문자열 그대로, 별도 덮어쓰기 라인 삭제)로 재작성. `R3_EMOJI_KEYS`/`R4_EMOJI_KEYS`의 반짝이 칸도 `sparkle_pair`→`sparkle_small`(쌍 모양)로 수정.
+
+**최종 확정 매핑표**(왼쪽=키 순서, 오른쪽=삽입 스프라이트 파일):
+- R2(9개+이모티콘복귀): 곰→bear / 고양이→cat / 토끼→rabbit / 딸기→strawberry / 꽃→flower / 하트→heart / 반짝이(큰단독)→sparkle_pair / 반짝이(큰+작은쌍)→sparkle_small / 리본→ribbon / [10번째=이모티콘 복귀]
+- R3(8개): 머그컵→mug / 구름→cloud / 음표→note / 달→moon / 스마일→smiley / 별→star / 반짝이(쌍)→sparkle_small / 하트외곽선→heart_outline / [9번째=사진에 아이콘 없는 빈칸, 히트존 미생성] / [10번째=BS]
+- R4(8개, 전부 mini): 반짝이(쌍)→sparkle_small / 리본→ribbon / 꽃→flower / 곰→bear / 고양이→cat / 토끼→rabbit / 딸기→strawberry / 구름→cloud(콤마 자리) / [Shift 비활성, 마침표 그대로 유지]
+
+### 3. R4 중복 이모지 키 → 미니 사이즈
+R4의 8개 이모지 키(R2/R3와 중복되는 이모지)가 삽입하는 토큰에 `size:'mini'` 플래그를 추가. 키 식별자에 `:mini` 접미사(`'emoji:sparkle_small:mini'` 등)를 붙이고 `handleKeyPress`가 접미사를 파싱해 `insertEmoji(id, 'mini')` 호출, 토큰은 `{type:'emoji', id, size}`로 저장.
+- LCD 렌더: `.lcd-emoji--mini` 클래스(`width/height: 0.65em`, 보통 1em 대비 65%)를 `makeEmojiIcon(id, size)`가 부여.
+- 라벨 Canvas 렌더(`render.js`): `EMOJI_MINI_SCALE = 0.65` 상수 신설, `emojiRenderSize(piece, glyphSize)`가 mini면 `glyphSize*0.65`를 반환해 `pieceWidth`(줄바꿈 계산)와 실제 `drawImage` 크기·x 진행폭에 동일하게 반영. 세로 중심(`y - renderSize/2`)은 그대로 유지해 줄 baseline 기준 정렬 유지.
+- 검증: DOM 실측 — 보통 이모지 20.8×20.8px, mini 이모지 13.5×13.5px(비율 0.6499, 목표 0.65 일치). Canvas 픽셀 스캔 — 보통 이모지 잉크 폭 20px, mini 이모지 잉크 폭 12px(비율 0.6, glyphSize 22px 기준 0.65배=14.3px에 근접, 실제 도형 형태상 여백 차이로 근사치).
+
+### 4. 타이틀 "라벨메이커" → "Label Maker" + 칩 스타일
+`index.html`의 `<h1 class="page-title">` 텍스트를 "Label Maker"(영문)로 변경(`<title>` 탭 제목은 한글 그대로 유지, 화면 타이틀만 변경 지시 범위). `.page-title`을 PNG 저장 버튼(`.label-download-btn`)과 같은 톤의 pill 칩으로 재스타일: `border-radius:999px`, `background:var(--tape-cream)`, `border:1px solid var(--border)`, `font-family:Galmuri11 등 도트폰트 스택`, `font-size:16px`, `padding: var(--sp-8) var(--sp-24)`. 클릭 기능 없는 순수 장식 배지.
+- 검증: `getComputedStyle` — text="Label Maker", fontFamily="Galmuri11, NeoDunggeunmo, DungGeunMo, DotGothic16, monospace", borderRadius="999px", background="rgb(255,243,218)"(--tape-cream 일치), border="1px solid rgb(232,223,211)"(--border 일치).
+
+### 검증 종합 (preview_eval, preview_screenshot 미사용 — 지시사항)
+- LCD 여백: 데스크톱/375px, 텍스트모드(짧은/긴 텍스트)·settings·confirm 모드 전부 상하좌우 여백을 두고 LCD 안쪽에 완전 포함(`contained:true`) 확인.
+- 이모지 매핑: 이모지 레이어 진입(`emoji_trim.png` 로드 확인) 후 25개 이모지 키를 DOM 순서대로 전부 클릭 → 삽입된 25개 스프라이트 src가 위 매핑표와 정확히 일치. "가나다 복귀" 키로 `kr_trim.png` 복귀 후 25개 이모지가 텍스트 버퍼에 그대로 보존됨을 확인.
+- R4 mini: DOM 실측 비율 0.6499, Canvas 픽셀 스캔으로 라벨 렌더에서도 축소 확인.
+- 타이틀: computed style로 텍스트/폰트/라운드/배경/보더 전부 확인.
+- 375px: `scrollWidth===clientWidth===innerWidth===375`(가로 스크롤 없음).
+- 콘솔 에러 0건, 네트워크 실패 0건(여러 단계 반복 확인).
+- 출력확인 플로우(핑크버튼→◀아니오→확정) 재확인 — 취소되어 텍스트 유지.
+
+### 직접 확인 못 한 부분 (정직하게 명시)
+- **육안 스크린샷 검증 불가**: 지시에 따라 `preview_screenshot`을 쓰지 않아, LCD 여백이 실제로 "적당히 아늑해 보이는지", mini 이모지가 실제로 "작고 귀여워 보이는지", 타이틀 칩의 실제 톤이 PNG 저장 버튼과 조화로운지는 좌표/스타일 수치로만 검증했다. 다만 이번 세션에서는 각 스프라이트 PNG 파일과 키보드/시트 원본 이미지를 Read 도구로 직접 열어 육안 대조했으므로(스크린샷이 아니라 정적 이미지 파일 확인), 매핑 자체의 시각적 정확성은 높은 확신도로 검증했다.
+- **R4 리본/반짝이 순서가 사용자 지시 순서와 다름**: 사용자 지시는 R4를 "리본, 반짝이(쌍), 꽃..."순으로 명시했으나 실제 사진은 "반짝이(쌍), 리본, 꽃..."순이다. 사진 실측을 우선해 실제 순서로 구현했다(지시 문서의 순서 오기로 판단, 그림-스프라이트 일치라는 상위 원칙에 따름).
+- **R2가 사용자 지시("9키": 곰~리본 8항목 나열)와 실제 반짝이 개수가 다름**: 사용자 지시는 반짝이를 "작은4각/큰다이아" 2종만 나열했지만 그 개수 표기("9키")와 실제 사진(반짝이 2종 맞음, 도합 9키 정확)은 결과적으로 일치했다 — 이번에 재확인한 결과 R2는 정확히 9개 이모지(하트 포함)+리본이 아니라 "하트, 반짝이×2, 리본"까지 포함해 9개가 맞다(곰·고양이·토끼·딸기·꽃·하트·반짝이단독·반짝이쌍·리본=9개), 지시 문구와 정합함을 재확인.
+
 ## 2026-07-05(9차) — 이모티콘 키 이미지 레이어 재구현 / 환경 버튼 클릭 안 되던 버그 수정
 
 ### 1. 환경 버튼("설정 메뉴 진입 불가") 원인 및 수정

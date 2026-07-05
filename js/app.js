@@ -167,17 +167,25 @@
   // 각 히트존 rect 3x3=9포인트 다수결로 "키캡 위(데크색 아님)" 판정, KR 좌표 그대로 30/30 통과.
   // 따라서 R2/R3/R4는 KR과 동일한 rect(R2_KR_RECTS/R3_KR_RECTS/R4_KR_RECTS)를 그대로 쓰고,
   // key만 이모지 삽입 동작으로 교체한다.
-  const R2_EMOJI_KEYS = ['emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:flower', 'emoji:heart', 'emoji:sparkle_big', 'emoji:sparkle_pair', 'emoji:sparkle_small', 'emoji:ribbon'];
+  // R2_KR_RECTS(10칸)에 각 박스 좌우 경계선을 그려 실제 키캡과 1:1 대조한 결과(육안 확인):
+  // 1곰 2고양이 3토끼 4딸기 5꽃 6하트 7반짝이(큰단독) 8반짝이(큰+작은쌍) 9리본 10이모티콘.
+  // 반짝이는 2종(단독/쌍)뿐이고 9번째는 반짝이가 아니라 리본이다(이전 버전이 반짝이를
+  // 3칸으로 잘못 세어 리본 자리를 반짝이로, 리본을 emoji 토글 자리로 밀어넣는 바람에
+  // 리본 키 자체가 증발했던 버그를 이번에 바로잡았다).
+  // 스프라이트 내용(파일명과 내부 도형이 불일치, 육안 확인 완료):
+  //   sparkle_pair.png = 큰다이아 단독 모양, sparkle_small.png = 큰+작은 쌍 모양,
+  //   sparkle_big.png = 큰+작은 2개(3점 조합) — 이 키보드 어디에도 없는 모양이라 미사용.
+  const R2_EMOJI_KEYS = ['emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:flower', 'emoji:heart', 'emoji:sparkle_pair', 'emoji:sparkle_small', 'emoji:ribbon', 'emoji'];
   const R2_EMOJI = buildRow(R2_KR_RECTS, R2_KR[0].rect.top, R2_KR[0].rect.height, R2_EMOJI_KEYS);
-  // R2 10번째 칸은 원래 'emoji' 토글 키였다 — 이모지 레이어 안에서는 같은 자리가 "가나다"
-  // 복귀 라벨 역할(emoji_trim.png에도 "이모티콘" 글자가 그대로 있어 자리는 같지만 동작만 바뀜).
-  R2_EMOJI[R2_EMOJI.length - 1] = { rect: R2_KR[R2_KR.length - 1].rect, key: 'emoji' };
 
-  const R3_EMOJI_KEYS = ['emoji:mug', 'emoji:cloud', 'emoji:note', 'emoji:moon', 'emoji:smiley', 'emoji:star', 'emoji:sparkle_pair', 'emoji:heart_outline', null, 'backspace'];
+  const R3_EMOJI_KEYS = ['emoji:mug', 'emoji:cloud', 'emoji:note', 'emoji:moon', 'emoji:smiley', 'emoji:star', 'emoji:sparkle_small', 'emoji:heart_outline', null, 'backspace'];
   const R3_EMOJI = buildRow(R3_KR_RECTS, R3_KR[0].rect.top, R3_KR[0].rect.height, R3_EMOJI_KEYS);
   // 9번째 칸(null)은 사진에도 아이콘이 없는 빈 키캡 — 비활성 처리(isKeyDisabled에서 처리).
 
-  const R4_EMOJI_KEYS = ['shift', 'emoji:sparkle_pair', 'emoji:ribbon', 'emoji:flower', 'emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:cloud', '.'];
+  // R4 이모지 8종은 전부 R2/R3와 중복되는 이모지라, 삽입 시 "미니" 사이즈로 구분한다
+  // (사용자 요청). 키 식별자에 ':mini' 접미사를 붙여 handleKeyPress가 size:'mini' 토큰을
+  // 삽입하도록 표시만 하고, 좌표/렌더 구조는 R2/R3와 동일하게 재사용한다.
+  const R4_EMOJI_KEYS = ['shift', 'emoji:sparkle_small:mini', 'emoji:ribbon:mini', 'emoji:flower:mini', 'emoji:bear:mini', 'emoji:cat:mini', 'emoji:rabbit:mini', 'emoji:strawberry:mini', 'emoji:cloud:mini', '.'];
   const R4_EMOJI = buildRow(R4_KR_RECTS, R4_KR[0].rect.top, R4_KR[0].rect.height, R4_EMOJI_KEYS);
   // Shift는 이 레이어에 의미가 없어 비활성(isKeyDisabled) 처리. 콤마 자리는 사진에 구름
   // 아이콘이 그려져 있어 emoji:cloud로 매핑, 마침표 자리는 사진 그대로 마침표 문자 유지.
@@ -312,11 +320,12 @@
     state.caret = totalDisplayLength();
   }
 
-  // 이모지 키(emoji:xxx) 입력 — 기존 글리프 토큰 방식과 동일한 패턴으로 텍스트 버퍼에
-  // { type:'emoji', id } 토큰을 삽입한다. id는 EMOJI_SPRITES의 키(스프라이트 파일명).
-  function insertEmoji(id) {
+  // 이모지 키(emoji:xxx[:mini]) 입력 — 기존 글리프 토큰 방식과 동일한 패턴으로 텍스트 버퍼에
+  // { type:'emoji', id, size } 토큰을 삽입한다. id는 EMOJI_SPRITES의 키(스프라이트 파일명),
+  // size는 'normal'(기본, R2/R3) | 'mini'(R4 중복 키, 약 60~70% 축소 렌더).
+  function insertEmoji(id, size) {
     flushComposer();
-    state.tokens.push({ type: 'emoji', id });
+    state.tokens.push({ type: 'emoji', id, size: size || 'normal' });
     state.caret = totalDisplayLength();
     renderLcd();
   }
@@ -459,7 +468,7 @@
         if (remaining > 0) remaining -= 1;
       } else if (tok.type === 'emoji') {
         const target = remaining > 0 ? beforeFrag : afterFrag;
-        target.appendChild(makeEmojiIcon(tok.id));
+        target.appendChild(makeEmojiIcon(tok.id, tok.size));
         if (remaining > 0) remaining -= 1;
       }
     }
@@ -598,9 +607,10 @@
   }
 
   // 이모지 스프라이트를 LCD 텍스트 흐름 안에 인라인으로 표시(줄 높이에 맞춘 작은 이미지).
-  function makeEmojiIcon(id) {
+  // size:'mini'(R4 중복 키로 삽입된 이모지)면 .lcd-emoji--mini 클래스로 축소 렌더(약 60~70%).
+  function makeEmojiIcon(id, size) {
     const wrap = document.createElement('span');
-    wrap.className = 'lcd-emoji';
+    wrap.className = 'lcd-emoji' + (size === 'mini' ? ' lcd-emoji--mini' : '');
     const src = EMOJI_SPRITES[id];
     if (src) {
       const img = document.createElement('img');
@@ -723,7 +733,12 @@
       return;
     }
     if (typeof key === 'string' && key.indexOf('emoji:') === 0) {
-      insertEmoji(key.slice('emoji:'.length));
+      // 'emoji:id' 또는 'emoji:id:mini' 형식 — 뒤의 ':mini'가 있으면 축소 렌더 플래그.
+      const rest = key.slice('emoji:'.length);
+      const miniSuffix = ':mini';
+      const isMini = rest.endsWith(miniSuffix);
+      const emojiId = isMini ? rest.slice(0, -miniSuffix.length) : rest;
+      insertEmoji(emojiId, isMini ? 'mini' : 'normal');
       window.LabelSound && window.LabelSound.playKey();
       return;
     }
