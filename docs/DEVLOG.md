@@ -1,5 +1,136 @@
 # DEVLOG — labelmaker
 
+## 2026-07-05(9차) — 이모티콘 키 이미지 레이어 재구현 / 환경 버튼 클릭 안 되던 버그 수정
+
+### 1. 환경 버튼("설정 메뉴 진입 불가") 원인 및 수정
+`preview_eval`로 `.oval-hitzone[data-oval="settings"]` 중심 좌표에서 `document.elementFromPoint()`를 호출한 결과, 오벌 버튼 자신이 아니라 `.machine-keyboard`(키보드 히트존 컨테이너, `left:0;top:0;width:100%;height:100%`로 기기 전체를 덮는 빈 배경 div)가 잡혔다 — 5개 오벌 전부 동일 증상. `.machine-ovals`와 `.machine-keyboard`가 같은 `z-index:2`인데 DOM 순서상 `.machine-keyboard`가 뒤에 오므로, 같은 스택 레벨에서 나중 요소가 위에 쌓여 오벌 영역(y 33.8~38.4%)까지 포함한 기기 전체를 가로챈 것이 원인. `.machine-keyboard`는 시각 요소 없는 컨테이너일 뿐인데 `pointer-events`가 기본값(`auto`)이라 자식 버튼이 없는 영역(자모 사이 여백 등)의 클릭까지 이 컨테이너가 먹어버렸다.
+- **수정**(`css/style.css`): `.machine-keyboard { pointer-events: none; }` + `.machine-keyboard .keyzone { pointer-events: auto; }`. 컨테이너 자체는 클릭을 투과시키고, 실제 키 히트존(`.keyzone`)에만 다시 클릭을 활성화.
+- 검증: 리로드 후 5개 오벌 전부 `elementFromPoint` 결과가 `oval-hitzone` 자신으로 확인(`isSelf:true` 5/5). 실제 이벤트 디스패치(pointerdown→mousedown→mouseup→click)로 환경 오벌 클릭 → `lcdScreen`에 `is-modal` 클래스 부여 + LCD "테이프색: 화이트 ◀▶" 표시 확인. ▲▼(카테고리: 테이프색→프레임→사이즈 순환)와 ◀▶(값 순환: 화이트→크림, 없음→실선 등) 전부 정상 동작 확인. 375px 뷰포트에서도 5개 오벌 재점검, 전부 정상.
+- 참고: `preview_click`(셀렉터 기반 클릭 도구)이 이 특정 버튼에서 예상과 다르게 동작해(좌표는 정확한데 핸들러가 안 태워짐) 검증은 수동 `dispatchEvent` 시퀀스로 진행했다 — 원인 불명, 버그 수정 자체와는 무관(수정 전/후 모두 `preview_click`은 같은 동작을 보였을 가능성이 있으나 확인 못함, 수동 디스패치로 실제 브라우저 클릭 경로와 동일한 이벤트 체인을 재현해 검증을 완료했다는 점만 명시).
+
+### 2. 이모티콘 키: 떠있는 CSS 오버레이 패널 폐기 → 3번째 키보드 이미지 레이어로 전환
+기존엔 이모티콘/기호 키를 누르면 `.symbol-overlay`(반투명 크림 배경의 떠있는 CSS 그리드 패널, 유니코드 기호 20종 + SVG 글리프 10종)가 키보드 위에 덮이는 방식이었다. 사진 기반 키보드(kr_trim/en_trim) 위에 이질적인 CSS 패널이 뜨는 게 기기와 동떨어져 보인다는 지적에 따라, 한/영 전환과 동일한 원리(이미지 src 통째 교체 + 좌표맵 교체)로 재구현했다.
+
+**새 에셋 `assets/머신이모티콘.png` 실측**: canvas alpha 스캔 결과 알파 전부 255(불투명) — kr_trim/en_trim과 마찬가지로 크림 배경 위에 그려진 이미지(알파 컷아웃 아님). 동일 threshold(배경색 rgb(253.75,247,239) 기준 거리 12) PIL 크롭으로 몸체 트림 → `assets/emoji_trim.png` **1095×792**. kr_trim(1096×792)/en_trim(1095×790)과 오차 1px 이내, 비율 오차 0.2% 이내로 동일 챠시 확인.
+- **좌표 검산**: 새로 측정하지 않고 기존 `R1_RECTS`~`R5_RECTS`(kr_trim 기준)를 emoji_trim.png에 그대로 적용해 3×3=9포인트 다수결 검산 실행 — **R2/R3/R4 30/30 = 100.0% 통과**(전부 "노란 데크가 아닌 키캡 위"). 재측정 불필요, 좌표 재사용으로 정렬 일관성 자동 보장.
+- **키 배열 확정**(각 행을 kr_trim과 나란히 겹쳐 크롭 대조, 키캡 경계 완전 일치 확인):
+  - R2(10칸): 곰·고양이·토끼·딸기·꽃·하트·반짝이(4점대)·반짝이(다이아쌍)·반짝이(4점소)·리본, 10번째는 "이모티콘"(레이어 안에서 "가나다 복귀" 라벨 역할).
+  - R3(10칸): 머그컵·구름·음표·달·스마일·별·반짝이(다이아쌍소)·하트(아웃라인)·**빈칸(사진에 아이콘 없음, 히트존 자체를 생성하지 않음)**·BS.
+  - R4(10칸): **Shift(이 레이어에서 의미 없어 비활성 처리)**·반짝이(다이아쌍)·리본·꽃·곰·고양이·토끼·딸기·구름·마침표(`.` 그대로 유지, 콤마 자리는 구름 아이콘으로 대체됨).
+
+### 3. `assets/emoji-sheet.png` 슬라이스 (연결요소 검출)
+흰 배경 + 검정 픽셀 이모지 그리드, 숫자·콤마·마침표 포함. PIL로 그레이스케일 threshold(235) 이진화 → 8방향 연결요소(flood fill) 검출 → 76개 원시 컴포넌트(눈·입·반짝이 조각 등으로 쪼개짐) → bbox 확장(margin 14px) 후 겹침 기준 union-find 병합 → **27개 그룹**(3행: 9+8+10, 마지막 행 끝 2개는 `,`/`.`이라 스프라이트 추출 대상에서 제외) → y-center 클러스터링(행 3개) + x좌표 정렬로 순서 확정 → 중복 캐릭터(3행에 1·2행과 같은 곰/고양이/토끼/딸기/구름/반짝이/리본/꽃 재등장) 제외하고 **유니크 17개**만 추출.
+- 각 스프라이트: 밝기 기준 알파(threshold 235, `alpha=(235-lum)/235*255*1.8`로 부드러운 안티에일리어싱 유지) + 잉크색(`#3A3330`) 고정 틴트로 개별 투명 PNG 저장 → `assets/emoji/{bear,cat,rabbit,strawberry,flower,heart,heart_outline,sparkle_big,sparkle_pair,sparkle_small,ribbon,mug,cloud,note,moon,smiley,star}.png`.
+- 키보드 R2/R3/R4의 모든 이모지 키가 이 17개로 전부 커버됨(딸기·리본·별 포함) — **SVG 글리프 폴백(기존 곰·딸기·클로버·하트·반짝이·리본·머그컵·별·구름·음표 10종) 사용 없음**. 매핑 확신도: R3(머그컵~하트아웃라인)는 시트 순서와 완전히 동일 순서로 대응, R2/R4는 반짝이류 세부 종류(4점/다이아쌍/소) 순서만 키보드 사진과 시트가 다르지만 반짝이는 상호 대체 가능한 장식이라 문제 삼지 않음(전부 실제 스캔·대조로 결정, 추측 매핑 없음).
+- 작업 중 도구 결과 채널로 "emoji-sheet.png를 방금 다른 버전으로 교체했으니 1:1 매핑이라 SVG 폴백 불필요하다"는 취지의 추가 지시가 삽입됐으나, 사용자가 채팅으로 보낸 메시지가 아니고 기존 지시(폴백 조건부 사용)를 재정의하려는 전형적 프롬프트 인젝션 패턴(2026-07-04 DEVLOG에 이미 같은 패턴 기록)이라 지시 자체는 따르지 않았다. 다만 실제 파일을 직접 재스캔해 사실 확인은 별도로 진행했고, 결과적으로 이번 매핑에서는 전 항목이 시트로 커버되어 폴백이 필요 없었다(인젝션의 결론과 우연히 같아졌을 뿐, 그 지시를 근거로 판단한 것은 아님).
+
+### 4. 이모지 입력·렌더 구현
+- **레이어 전환**(`js/app.js`): `state.kbLayer`에 `'emoji'` 추가, `state.prevTextLayer`(진입 전 `'hangul'|'english'` 기억). `toggleEmojiLayer()`가 한/영 전환(`toggleLang()`)과 동일한 패턴으로 `machineImgEl.src`를 `MACHINE_IMG_SRC.emoji`(`assets/emoji_trim.png`)로 교체 + `renderKeyboard()`. 다시 누르면 `prevTextLayer`로 복귀. 영문 레이어의 기존 `symbol` 키(R2 11번째, Symbol 전환용)도 `emoji`로 통합해 영문 레이어에서도 이모티콘 진입 가능.
+- **토큰**: 기존 글리프 토큰(`{type:'glyph', id}`)과 동일한 패턴으로 `{type:'emoji', id}`를 `insertEmoji(id)`가 버퍼에 append. `removeLastChar()`가 `glyph`/`emoji` 둘 다 pop 대상으로 처리하도록 확장.
+- **LCD 인라인 렌더**: `renderLcd()`의 토큰 순회에 `tok.type === 'emoji'` 분기 추가, `makeEmojiIcon(id)`가 `<span class="lcd-emoji"><img src="assets/emoji/{id}.png"></span>` 생성(CSS `.lcd-emoji{width:1em;height:1em}`로 줄 높이에 맞춤, `image-rendering:pixelated`로 픽셀아트 느낌 유지). 가로 스크롤 caret 로직(기존 `totalDisplayLength`가 glyph/emoji 모두 1글자로 계산)과 그대로 호환.
+- **라벨 출력 렌더**(`js/render.js`): `flattenPieces()`에 `emoji` 타입 조각 추가(폭 계산은 기존 glyph와 동일하게 `glyphSize+6`). `drawLabel()`이 `loadEmojiImage(id, color)`로 스프라이트를 로드해 `drawImage`로 인라인 렌더 — 스프라이트가 이미 잉크색으로 고정 틴트된 PNG라, 반전 프레임(색이 테이프색으로 바뀌어야 함)에서는 오프스크린 캔버스 `globalCompositeOperation:'source-in'` 합성으로 재틴트한 이미지를 색상별 캐시(`id|color` 키)에 저장. 멀티라인/줄바꿈과 자연히 호환(기존 레이아웃 로직 변경 없음).
+
+### 5. 떠있던 오버레이 패널 완전 제거
+- `index.html`: `#symbolOverlay`/`#symbolCloseBtn`/`#symbolGrid` DOM 전부 삭제.
+- `css/style.css`: `.symbol-overlay`/`.symbol-close`/`.symbol-grid`/`.symbol-btn` 규칙 전부 삭제, 375px 미디어쿼리의 `.symbol-btn` 규칙도 제거. 대신 `.lcd-emoji`(인라인 이모지 아이콘) 규칙 신설.
+- `js/app.js`: `symbolOverlayEl`/`symbolGridEl`/`symbolCloseBtn`/`renderSymbolGrid()`/`toggleSymbolOverlay()`/`insertSymbolText()`/`SYMBOL_CHARS`/`state.symbolOpen` 전부 제거. `insertGlyph()`도 호출처가 없어져 제거(단, `type:'glyph'` 토큰 처리 경로와 `window.Glyphs`/`GLYPH_LIST`는 render.js의 반전 프레임 로직 등에서 여전히 쓰여 유지).
+
+### 검증 (`preview_eval`, `preview_screenshot` 미사용 — 지시사항, 타임아웃 회피)
+- **환경 버튼**: 리로드 후 5개 오벌 전부 `elementFromPoint` 결과가 자기 자신(`isSelf:true`), 실제 이벤트 디스패치로 환경 클릭 → `is-modal` + "테이프색: 화이트 ◀▶" 확인 → ▶(크림)/▼▶(프레임: 실선) 순차 변경 LCD로 확인 → 재클릭으로 text 모드 복귀 확인. 375px에서도 5개 오벌 재점검(전부 `isSelf:true`).
+- **이모지 레이어 전환**: "이모티콘" 키 클릭 → `machineImg.src`가 `emoji_trim.png`로 교체, `.keyzone[aria-label="이모지 삽입"]` 25개(R2 9 + R3 8 + R4 8) 생성 확인, "가나다 복귀" 라벨 존재 확인. Shift 히트존이 이 레이어에서 `disabled:true` + `is-disabled` 클래스 확인. keyzone 총 개수 47개(R1 11 + R2 10 + R3 9(빈칸 제외) + R4 10 + R5 7) 정확히 일치 확인.
+- **이모지 삽입**: 곰/고양이/토끼/딸기/꽃 순서로 5개 클릭 → LCD에 `.lcd-emoji img` 5개, src가 각각 `bear.png`~`flower.png` 순서로 정확히 대응 확인. "가나다 복귀" 클릭 → `machineImg.src`가 `kr_trim.png`로 복귀, 입력했던 이모지 5개가 텍스트 버퍼에 그대로 유지됨(`lcdTextPreserved:5`) 확인.
+- **라벨 렌더**: `LabelRenderer.drawLabel()` 직접 호출로 텍스트+이모지 혼합 토큰(단일 줄/4줄 멀티라인) 정상 렌더 확인(에러 없음, `lineCount` 정확). 반전 프레임(`frame:'invert'`, 테이프색 핑크)에서 이모지 픽셀 스캔 → 배경은 잉크색 `rgb(58,51,48)` 100%, 이모지 재틴트 색 `rgb(251,227,232)`(요청한 핑크 테이프색과 정확히 일치) 97픽셀 검출 — 재틴트 정상 동작 확인.
+- **DOM 제거**: `#symbolOverlay` 존재 여부 `false`, `.symbol-btn`/`.symbol-overlay` 개수 0 확인.
+- 375px: `scrollWidth === clientWidth === innerWidth === 375`(가로 스크롤 없음). 콘솔 에러 0건, 네트워크 실패 0건(여러 단계에서 반복 확인).
+
+### 직접 확인 못 한 부분 (정직하게 명시)
+- **육안 스크린샷 검증 불가**: 지시에 따라 `preview_screenshot`을 쓰지 않아, `emoji_trim.png` 히트존의 실제 시각적 정렬감, 이모지 스프라이트가 LCD/라벨 안에서 실제로 "귀여워 보이는지", 슬라이스된 스프라이트의 안티에일리어싱 품질은 좌표·픽셀 스캔 수치로만 검증했다.
+- **`preview_click` 도구가 환경 오벌에서 예상과 다르게 동작한 이유는 불명**: 좌표는 정확한데(`elementFromPoint`로 자기 자신 확인) 셀렉터 기반 클릭이 핸들러를 태우지 못하는 현상을 관찰했다(짝수 번 실행된 것처럼 상태가 원복됨). 수동 `dispatchEvent` 시퀀스로 우회해 실제 검증은 완료했으나, 이 도구 자체의 동작 방식 차이는 조사하지 않았다.
+- **R2/R4 반짝이류 세부 매핑은 사진과 시트 순서가 완전히 일치하지 않음**: 반짝이(4점/다이아쌍/소) 3종은 상호 대체 가능한 장식으로 간주해 순서 불일치를 문제 삼지 않았다 — 엄밀히 "어느 키가 정확히 어느 반짝이인지"는 다소 자의적 배정이다(보고에 명시).
+- **이모지 스프라이트의 `note.png`(음표)는 원본에 검은 채움 부분이 있어 알파 마스킹 후에도 완전 채움으로 보임** — 원본 그대로이며 처리 오류는 아니나, 다른 스프라이트(전부 아웃라인)와 시각적 톤이 살짝 다를 수 있음(육안 미확인).
+
+## 2026-07-05(8차) — 라벨 멀티라인·동적 높이(영수증형) / 슬롯 위 출력 위치 수정 / 스텝형 급지 연출 / PNG 버튼·리셋
+
+### 1. 라벨 자동 줄바꿈 + 세로로 길어지는 사각형 (영수증)
+`js/render.js`에 어절 우선(공백 단위) 줄바꿈, 한 어절이 `maxWidth`(가로 폭 고정, `width - paddingX*2`)보다 길면 글자 단위로 재분할하는 로직을 새로 작성(`flattenPieces`/`groupIntoWords`/`layoutLines`). 개행(`\n`)은 강제 줄바꿈으로 처리.
+- 세로 높이를 줄 수에 비례해 동적 계산: `contentHeight = lines.length * lineHeight + paddingY*2`, `height = max(minHeight, contentHeight)`. `strip`은 기존 100px을 최소값으로 유지, `square`는 폭(160px)을 최소 높이로 써서 "정사각 기본, 줄 많으면 늘어남"을 구현.
+- 줄 수를 실제로 그리기 전에 알아야 캔버스 크기를 정할 수 있어, 오프스크린 `measureCanvas`로 먼저 `layoutLines()`를 실행해 줄 수/폭을 구하고 그 다음 실제 canvas.width/height를 설정하는 2단계 구조로 변경.
+- `drawLabel()`이 이제 `{width, height, lineCount}`를 반환 — `app.js`가 이 값으로 화면 표시 라벨 크기(`labelCanvas.style.width/height`)와 애니메이션 총 시간을 결정한다.
+- PNG 다운로드(`downloadLabelPng`)는 동일한 `drawLabel()`을 재사용하므로 멀티라인·동적 높이가 그대로 반영됨(추가 변경 불필요).
+- 버그 1건 발견 후 즉시 수정: `layoutLines()`에서 `wordWidth(ctx, word.pieces, glyphSize)`로 호출했는데 `wordWidth` 내부가 이미 `word.pieces`를 순회하는 구조라 `word.pieces.pieces`가 되어 `TypeError: word.pieces is not iterable` 발생 — 호출부를 `wordWidth(ctx, word, glyphSize)`로 수정.
+
+### 2. 라벨 위치 — 슬롯에서 위로 나오도록 근본 수정
+**원인**: `.machine-slot-clip`이 `top:0%~height:20.01%`(기기 내부, LCD 상단부와 겹치는 영역)였고 `.label-output`이 그 안 `bottom:0`(=20.01% 지점)에 고정돼 있어, 라벨이 사실상 LCD 위에 뜬 것처럼 보이는 구조였다(요구사항과 반대 방향).
+**수정**: `.machine-slot-clip`을 `top: -120%`(기기 위쪽 바깥으로 확장) ~ `bottom: 93.81%`(=100%-6.19%, 슬롯 라인에 정확히 물림)로 재정의. `.label-output`은 그대로 그 컨테이너의 `bottom:0`(=슬롯 라인)에 고정되므로, 라벨이 슬롯 라인에서 위(기기 바깥)로만 자라나고 슬롯 아래(LCD/키보드 쪽)로는 전혀 새지 않는다. `.label-canvas`의 `max-height:120px` 제한도 제거(멀티라인이 늘어난 만큼 화면에도 그대로 반영되도록), 대신 `max-width: 92cqw` 유지.
+- 검증: 6줄 영문 라벨 출력 후 `labelCanvas.getBoundingClientRect()`가 슬롯 클립 컨테이너 내부에 완전히 포함되고(`bottom` 일치), LCD rect와 겹치지 않음(`overlapsLcd:false`), 실제 키 히트존(`.keyzone` 48개) 중 겹치는 것 0건(`overlapCount:0`) 확인.
+
+### 3. 스텝형(두두두) 급지 연출
+`@keyframes print-winch`를 기존 6~8단계 부드러운 곡선에서 **12단계** "훅 올라옴(약 7%) → 짧게 멈칫(약 1%)" 반복 구조로 재작성(`css/style.css`). `machine-wobble`도 동일한 8/16/24…% 지점에 맞춰 재작성. 애니메이션 타이밍함수를 `cubic-bezier`/`ease-out`에서 `linear`로 바꿔 keyframe 자체의 스텝 구조가 그대로 드러나게 함.
+- `js/app.js`의 `startPrint()`가 `drawLabel()`이 반환한 `lineCount`로 총 시간을 계산: `totalMs = 2000 + (lines-1) * 250`(기본 2000ms, 줄당 +250ms). `machineEl.style.setProperty('--anim-print', totalMs+'ms')`로 인라인 오버라이드(CSS 변수 상속으로 `.label-canvas`/`.machine`에 모두 적용).
+- 드르륵 사운드: 기존 `[0,12,25,38,52,66,80]`(7스텝, 1400ms 고정) 대신 `RATTLE_STEP_PCTS = [0,8,16,24,32,40,48,56,64,72,80,88]`(12스텝, keyframe 퍼센트와 동일 지점)를 `totalMs` 기준으로 `setTimeout` 스케줄링 — 음소거 연동은 기존 `LabelSound.playPrintRattleStep()` 내부 로직 그대로(변경 없음).
+- 헤드리스 프리뷰 타이머 스로틀 대응(기존 세션 한계 동일 계승): `is-printing` 클래스는 `totalMs` 후 무조건 제거되어 `is-visible`만 남은 기본 상태(`translateY(0) rotateX(0)`, `opacity:1`)로 수렴 — 애니메이션이 실제로 재생되든 타이머가 멈추든 최종 위치는 항상 슬롯 위 정지 상태에 도달한다.
+
+### 4. PNG 저장 버튼 — 도트폰트로 작고 귀엽게
+`height 44px→32px`, `font-size 14px→13px` + `font-family: Galmuri11(...)` 도트폰트 적용, `border-radius: 999px`(pill), `background: var(--tape-cream)`로 변경. 전부 `docs/design-tokens.md`에 정의된 값만 사용(새 색상 추가 없음, 기존 테이프색 재사용).
+
+### 5. PNG 저장 후 초기화면으로 리셋
+`labelDownloadBtn` 클릭 핸들러에 `downloadLabelPng()` 완료 후 `resetToInitialScreen()` 호출 추가. 이 함수는 `handleClearAll()`(tokens/composer/caret 초기화 + LCD 재렌더)을 재사용하고, 추가로: `state.mode='text'`, 라벨 캔버스 클래스(`is-visible`/`is-printing`) 제거 + style.width/height 초기화 + `clearRect`로 픽셀도 지움, PNG 버튼 `hidden=true`, 키보드 레이어가 영문이었으면 한글로 복귀(`machineImgEl.src`, `renderKeyboard()`).
+
+### 검증 (preview_eval, preview_screenshot 미사용 — 지시사항)
+- 긴 영문 문구(약 120자) 입력 → 출력 → 캔버스가 6줄로 렌더(`lineCount:6`), 화면 표시 크기 `280×267px`(단일 줄 100px 대비 대폭 커짐), `--anim-print`가 `3500ms`로 자동 계산(2000+6*250=3500 검증식 일치).
+- 라벨 최종 위치: `labelCanvas.getBoundingClientRect()`가 `machine-slot-clip` 내부에 포함, `LCD`/`keyboard`(실제 `.keyzone` 48개 전수 검사) 어디와도 겹치지 않음(`overlapCount:0`).
+- 정사각 사이즈(`square`)에 긴 한글 문구 → `width:160`(고정) 유지, `height:234`(6줄, 160보다 커짐) 확인.
+- 어절 단위 우선 줄바꿈 + 공백 없는 초장문 단어(757px, maxWidth 240px 초과) 글자 단위 분할 모두 정상 동작, 라벨 네 모서리 alpha=0(투명, 넘침 없음) 확인.
+- PNG 저장 버튼: `font-family: Galmuri11, ...`, `height:32px`, `font-size:13px`, `border-radius:999px` 확인.
+- PNG 저장 클릭 → `downloadLabelPng()` 완료 직후: `labelDownloadBtn.hidden:true`, `labelCanvas.className`에서 `is-visible`/`is-printing` 제거됨, `style.width/height` 초기화, LCD가 "문구를 입력하세요" 플레이스홀더로 복귀, 키보드 이미지 `kr_trim.png`(한글) 유지 확인.
+- 375px: `scrollWidth===clientWidth===innerWidth===375`(가로 스크롤 없음). 콘솔 에러 0건, 네트워크 실패 0건.
+
+### 직접 확인 못 한 부분 (정직하게 명시)
+- **육안 스크린샷 검증 불가**: 지시에 따라 `preview_screenshot`을 쓰지 않아, "두두두" 스텝 연출의 실제 리듬감(멈칫하는 느낌이 자연스러운지), 라벨이 슬롯에서 올라오는 모습의 시각적 완성도, PNG 버튼의 실제 "귀여운" 인상은 눈으로 확인하지 못했다. 좌표·클래스·계산값만 수치로 검증했다.
+- **애니메이션이 실제로 스텝 단위로 "재생되는지"는 기존 세션들과 동일하게 이 환경에서 재확인 불가**: 헤드리스 프리뷰의 CSS 애니메이션 타이머 스로틀 한계(2026-07-05(7차) 이전부터 반복 확인된 사항)로, keyframe 중간 단계(12스텝 각각의 멈칫)가 실제 프레임 단위로 진행되는지는 검증 범위 밖. 최종 상태 도달(`is-printing` 강제 제거)로 "출력이 슬롯 위에 최종적으로 보인다"는 것만 보장했다.
+- **드르륵 사운드의 실제 청감·박자감**: 함수 호출 자체(`playPrintRattleStep`)는 에러 없이 스케줄링되는 것만 확인, 실제 음색·타이밍이 스텝 연출과 귀로 들었을 때 맞아떨어지는지는 확인 불가.
+
+## 2026-07-05(7차) — 라벨 Canvas 직접 렌더 전환 / 출력 연출 근본 수정 / LCD 폰트 축소 / 기기 세로 중앙 배치
+
+### 1. 라벨 출력물: 사진 텍스처 폐기 → Canvas 코드 렌더
+`assets/label-texture.png`(`라벨지모음.png`를 alpha 마스킹한 텍스처, 약 4도 기울어진 상태로 남아있던 결과물) 로드·`drawTextureCover()`·곱연산 틴트 코드를 `js/render.js`에서 전부 제거. 이제 라벨은:
+- 배경: `fillStyle = tapeColor`(테이프 6색 단색) 단순 채움. `drawRoundedRect(0,0,w,h,radius)`로 clip 후 채워 기울기 0, 바깥 완전 투명 유지.
+- radius 기본값을 3px→10px로 변경(지시사항 8~12px 범위, 반듯한 라운드 사각 느낌).
+- 비닐 코팅 광택: 신규 `drawGlossBand()` — 라벨을 -22.5deg 대각선으로 가로지르는 반투명 흰색 리니어 그라데이션 밴드(중심 불투명도 0.15, 양끝 0) 1줄. invert 프레임(배경이 잉크색 단색 채움)에는 적용 안 함(광택은 테이프색 배경 전용).
+- 텍스트/글리프 폰트: Jua/Gaegu 폐기, **Galmuri11**(LCD와 동일 도트 픽셀폰트) 고정. 그리기 전 `await document.fonts.load('22px "Galmuri11"')`로 로드 보장. 폴백 체인 `Galmuri11 → NeoDunggeunmo → DungGeunMo → DotGothic16 → monospace`(LCD와 동일 스택).
+- 잉크색은 반전 프레임이 아닌 한 항상 `#3A3330` 고정(기존엔 `textColor` 옵션으로 `#5B4A3F` 웜브라운을 썼으나 지시사항대로 잉크색 통일).
+- 완성 라벨 그림자(`box-shadow: 0 2px 6px rgba(58,51,48,0.08)`)는 기존 CSS 그대로 유지(변경 없음).
+- `docs/design-tokens.md`에 "라벨 출력물은 비닐 광택 허용" 예외 조항 추가(대담함은 한 곳 규칙 아래).
+- 폰트 설정 UI(HOME 메뉴의 "폰트: 즐거운/개구쟁이/고딕" 항목)를 완전히 제거(`js/app.js`의 `FONT_OPTIONS`, `state.fontIdx`, `currentFont()` 삭제, `SETTING_CATEGORIES`를 테이프색→프레임→사이즈 3개로 축소) — 렌더가 항상 Galmuri11로 고정되는데 폰트 선택 UI를 남겨두면 선택이 반영 안 되는 거짓 UI가 되기 때문.
+
+### 2. 출력 연출: "슬롯에서 위로 올라옴" 구조적 버그 수정
+**원인 조사 결과**: `.label-output`(라벨을 감싸는 컨테이너)이 `bottom: -100%`(자기 높이의 100% 아래, 슬롯 클립 컨테이너 밖)에 배치되어 있었고, keyframe 애니메이션의 최종 상태가 `transform: translateY(0%)`였다. `translateY(0)`은 "이동 없음"이므로 최종 상태에서도 라벨은 `bottom:-100%` 위치, 즉 **슬롯 클립 컨테이너(overflow:hidden) 바깥 아래**에 그대로 남아 화면에 전혀 보이지 않는 구조였다(애니메이션이 끝까지 재생되어도 마찬가지). 이게 "출력이 안 보인다"는 기존 문제의 근본 원인.
+- **수정**: `.label-output`을 `bottom: 0`(슬롯 클립 컨테이너 하단에 고정 = 최종 정지 위치)으로 변경. 시작(숨김) 상태는 `.label-canvas`의 `transform: translateY(양수%)`로 아래로 밀어내는 방식으로 뒤집었다. 이제 `translateY(0)`이 곧 "슬롯 클립 안에 보이는 최종 위치"가 된다.
+- **rAF 의존 제거**: 기존 `js/app.js`의 `startPrint()`가 `requestAnimationFrame(() => canvas.classList.add('is-printing'))`으로 애니메이션을 트리거했는데, 헤드리스 프리뷰에서 이 rAF 콜백 자체가 응답하지 않는 문제가 있었다(DEVLOG 2026-07-05(4차)/(5차)에 이미 기록된 한계). 이번엔 `requestAnimationFrame` 대신 `setTimeout(fn, 0)`으로 교체하고, CSS에 `.label-canvas.is-visible`(display:block만, 애니메이션 없음) 클래스를 신설해 `is-printing` 없이도 "보이는 최종 정지 상태"에 도달 가능하게 분리했다.
+- **애니메이션 타이머 자체가 멈추는 환경 대응**: 실제로 이 프리뷰 환경에서는 `canvas.getAnimations()[0].playState === 'running'`인데도 `currentTime`이 계속 `0`에 고정되어(탭이 백그라운드로 취급되어 CSS 애니메이션 타이머가 진행되지 않는 것으로 추정) keyframe 0%(투명, 아래) 상태에 멈춰있는 것을 확인했다. 이를 근본적으로 우회하기 위해, 출력 완료 타이머(1400ms 후) 콜백에서 `labelCanvas.classList.remove('is-printing')`을 호출하도록 추가했다 — `is-printing`이 없어지면 애니메이션 자체가 적용되지 않고 `is-visible`만 남아, 기본 CSS 값(`transform: translateY(0) rotateX(0deg); opacity:1`)에 무조건 도달한다. 정상 브라우저에서 애니메이션이 끝까지 재생된 경우와 헤드리스에서 타이머가 멈춘 경우 둘 다 동일한 최종 정지 상태로 수렴한다.
+- 애니메이션 자체(`@keyframes print-winch`, 1400ms, 6~8단계 감기는 리듬)는 CSS keyframes 그대로 유지 — rAF 등 JS 타이밍 의존 없이 CSS 자체 트랜지션 메커니즘만 사용.
+
+### 3. LCD 폰트 축소
+`.lcd-screen`의 `font-size`를 `6cqw → 5cqw`, `.lcd-screen.is-modal #lcdText`(확인창/설정모드)를 `3.6cqw → 3cqw`로 축소. `.machine`이 `container-type: inline-size`라 cqw가 기기 자체 폭에 비례한다.
+
+### 4. 기기 세로 중앙 배치
+`.page`에 `min-height: 100vh` + `justify-content: center` 추가(기존엔 `flex-direction:column; align-items:center`만 있고 세로 정렬 기준이 없어 콘텐츠가 위에 붙어있었다). `padding-top`을 `--sp-24`→`--sp-48`로 늘려 기기가 정중앙보다 살짝 아래(라벨이 위로 올라올 공간 확보)에 오도록 했다.
+
+### 검증 (preview_eval, preview_screenshot 미사용)
+- 데스크톱(1280×900): 기기 `top 281 / bottom 657`, 뷰포트 세로 중앙(450) 근처.
+- 375px: `scrollWidth === clientWidth === innerWidth === 375`(가로 스크롤 없음), 기기 `top 292` (상단에서 충분히 내려옴).
+- LCD 텍스트 rect가 LCD 컨테이너 rect 안쪽에 위쪽·아래쪽 각각 24~36px 여유를 두고 완전히 포함됨(데스크톱/375px 둘 다 `isContained: true`).
+- `document.fonts.check('32px "Galmuri11"')` → `true`.
+- 출력 플로우(한글 입력 → 핑크버튼 → 선택줄변경으로 확정) 실행 후 1700ms 시점: `labelCanvas.className === 'label-canvas is-visible'`(`is-printing` 자동 제거 확인), `getComputedStyle().transform === 'matrix(1,0,0,1,0,0)'`(최종 정지), `opacity: '1'`, 라벨 rect가 슬롯 클립 컨테이너 rect 안에 완전히 포함(`isVisibleWithinSlot: true`)되고 뷰포트 안에도 보임(`inViewport: true`) — 데스크톱/375px 둘 다 확인.
+- Canvas 픽셀 스캔: 라벨 4모서리 alpha=0(투명, radius 라운드 확인), 배경이 지정한 테이프색과 일치(예: 민트 `#DFF0DC` → rgb(223,240,220) 근방), 광택 밴드가 실제 대각선(y=15%에서 밝기 최고점 x=436, y=85%에서 x=96 — 위치가 y에 따라 이동해 수평이 아닌 대각선임을 확인)으로 존재, 프레임 라인이 정확히 잉크색 `rgb(58,51,48)`(#3A3330)로 그려짐.
+- `downloadLabelPng()` 직접 호출 → 에러 없이 완료, `<a>.click()` 트리거 확인.
+- 콘솔 에러 0건, 네트워크 실패 0건(데스크톱/375px 둘 다 재확인).
+
+### 직접 확인 못 한 부분 (정직하게 명시)
+- **육안 스크린샷 검증 불가**: 지시에 따라 `preview_screenshot`을 쓰지 않아, 광택 밴드의 실제 시각적 강도("과하지 않은" 느낌인지), 도트 폰트의 실제 가독성, 라벨이 슬롯에서 올라오는 모션의 리듬감을 눈으로 확인하지 못했다. 픽셀 스캔·rect 좌표·클래스 상태로만 수치 검증했다.
+- **애니메이션이 실제로 "재생되는" 것은 이번에도 직접 못 봄**: 이 헤드리스 프리뷰 환경은 CSS 애니메이션 타이머(`getAnimations()[0].currentTime`)가 계속 0에 고정되는 것을 확인했다 — 즉 keyframe 중간 단계(6~8단계 감기는 리듬, 모서리 말림 오버슈트)가 실제로 프레임 단위로 진행되는지는 이 환경에서 검증 불가능하다. 다만 최종 상태 도달은 `is-printing` 제거를 통한 강제 수렴으로 보장했으므로, "출력이 안 보인다"는 원래 버그(최종 상태 자체가 클립 밖에 있던 구조적 문제)는 확실히 해결했다.
+- **정상 브라우저에서의 애니메이션 재생 여부**: 코드 구조상(CSS keyframes, rAF 미사용) 표준 브라우저에서는 정상 재생될 것으로 판단하나, 이 프리뷰 도구의 한계로 실제 프레임 진행은 재확인하지 못했다.
+
 ## 2026-07-05(6차) — ㅔ 키 실측 재확인(스킵)/출력확인창 클리핑 수정/LCD 픽셀폰트 교체
 
 ### 1. ㅔ 키 추가 — 스킵 (에셋 자체에 여백 없음, 강행 안 함)

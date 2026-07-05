@@ -105,14 +105,14 @@
   const R4_KR = buildRow(R4_KR_RECTS, 70.202, 7.449, R4_KR_KEYS);
 
   // ---- 영문 레이어 ----
-  // R2(11칸): QWERTYUIOP + Symbol
+  // R2(11칸): QWERTYUIOP + 이모티콘(기존 Symbol 키를 이모지 레이어 토글로 재사용)
   const R2_EN_RECTS = [
     { left: 5.205, width: 8.311 }, { left: 13.790, width: 8.128 }, { left: 22.374, width: 8.128 },
     { left: 30.868, width: 8.128 }, { left: 39.361, width: 8.037 }, { left: 47.671, width: 7.854 },
     { left: 55.799, width: 7.671 }, { left: 63.744, width: 7.306 }, { left: 71.416, width: 6.941 },
     { left: 78.721, width: 7.032 }, { left: 86.027, width: 7.580 }
   ];
-  const R2_EN_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'symbol'];
+  const R2_EN_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'emoji'];
   const R2_EN = buildRow(R2_EN_RECTS, 50.886, 8.734, R2_EN_KEYS);
 
   // R3(10칸): ASDFGHJKL + BS
@@ -161,13 +161,56 @@
   }
   const R5 = buildR5();
 
-  // 기호 20종 + 글리프 10종 = 30개 (기호 오버레이 전용, 콤보 없음)
-  const SYMBOL_CHARS = ['♡', '♥', '☆', '★', '✧', '✦', '₊', '˚', '·', '＊', '✿', '❀', '⌒', '〜', '♪', '♬', '◠', '‿', '°', '｡'];
-  const GLYPH_IDS = GLYPH_LIST.map(g => g.id);
+  // ---- 이모티콘 레이어 ----
+  // assets/emoji_trim.png는 kr_trim.png와 동일 챠시(오벌/LCD/핑크버튼/기능키 위치 동일,
+  // 트림 크기 1095x792 vs 1096x792 — 1px 오차, 검산 결과 R1~R5 좌표 100% 재사용 가능:
+  // 각 히트존 rect 3x3=9포인트 다수결로 "키캡 위(데크색 아님)" 판정, KR 좌표 그대로 30/30 통과.
+  // 따라서 R2/R3/R4는 KR과 동일한 rect(R2_KR_RECTS/R3_KR_RECTS/R4_KR_RECTS)를 그대로 쓰고,
+  // key만 이모지 삽입 동작으로 교체한다.
+  const R2_EMOJI_KEYS = ['emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:flower', 'emoji:heart', 'emoji:sparkle_big', 'emoji:sparkle_pair', 'emoji:sparkle_small', 'emoji:ribbon'];
+  const R2_EMOJI = buildRow(R2_KR_RECTS, R2_KR[0].rect.top, R2_KR[0].rect.height, R2_EMOJI_KEYS);
+  // R2 10번째 칸은 원래 'emoji' 토글 키였다 — 이모지 레이어 안에서는 같은 자리가 "가나다"
+  // 복귀 라벨 역할(emoji_trim.png에도 "이모티콘" 글자가 그대로 있어 자리는 같지만 동작만 바뀜).
+  R2_EMOJI[R2_EMOJI.length - 1] = { rect: R2_KR[R2_KR.length - 1].rect, key: 'emoji' };
+
+  const R3_EMOJI_KEYS = ['emoji:mug', 'emoji:cloud', 'emoji:note', 'emoji:moon', 'emoji:smiley', 'emoji:star', 'emoji:sparkle_pair', 'emoji:heart_outline', null, 'backspace'];
+  const R3_EMOJI = buildRow(R3_KR_RECTS, R3_KR[0].rect.top, R3_KR[0].rect.height, R3_EMOJI_KEYS);
+  // 9번째 칸(null)은 사진에도 아이콘이 없는 빈 키캡 — 비활성 처리(isKeyDisabled에서 처리).
+
+  const R4_EMOJI_KEYS = ['shift', 'emoji:sparkle_pair', 'emoji:ribbon', 'emoji:flower', 'emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:cloud', '.'];
+  const R4_EMOJI = buildRow(R4_KR_RECTS, R4_KR[0].rect.top, R4_KR[0].rect.height, R4_EMOJI_KEYS);
+  // Shift는 이 레이어에 의미가 없어 비활성(isKeyDisabled) 처리. 콤마 자리는 사진에 구름
+  // 아이콘이 그려져 있어 emoji:cloud로 매핑, 마침표 자리는 사진 그대로 마침표 문자 유지.
+
+  // 이모지 스프라이트 id -> 파일 경로. assets/emoji-sheet.png(흰 배경, 검정 픽셀 이모지)를
+  // PIL 연결요소 검출로 슬라이스한 17개 투명 PNG(잉크색 #3A3330 틴트 적용 완료).
+  const EMOJI_SPRITES = {
+    bear: 'assets/emoji/bear.png',
+    cat: 'assets/emoji/cat.png',
+    rabbit: 'assets/emoji/rabbit.png',
+    strawberry: 'assets/emoji/strawberry.png',
+    flower: 'assets/emoji/flower.png',
+    heart: 'assets/emoji/heart.png',
+    heart_outline: 'assets/emoji/heart_outline.png',
+    sparkle_big: 'assets/emoji/sparkle_big.png',
+    sparkle_pair: 'assets/emoji/sparkle_pair.png',
+    sparkle_small: 'assets/emoji/sparkle_small.png',
+    ribbon: 'assets/emoji/ribbon.png',
+    mug: 'assets/emoji/mug.png',
+    cloud: 'assets/emoji/cloud.png',
+    note: 'assets/emoji/note.png',
+    moon: 'assets/emoji/moon.png',
+    smiley: 'assets/emoji/smiley.png',
+    star: 'assets/emoji/star.png'
+  };
+  window.EmojiSprites = EMOJI_SPRITES;
 
   function keyboardLayout(kbLayer) {
     if (kbLayer === 'english') {
       return [...R1, ...R2_EN, ...R3_EN, ...R4_EN, ...R5];
+    }
+    if (kbLayer === 'emoji') {
+      return [...R1, ...R2_EMOJI, ...R3_EMOJI, ...R4_EMOJI, ...R5];
     }
     return [...R1, ...R2_KR, ...R3_KR, ...R4_KR, ...R5];
   }
@@ -175,11 +218,8 @@
   // --------------------------------------------------------------------
   // 상태
   // --------------------------------------------------------------------
-  const FONT_OPTIONS = [
-    { id: 'Jua', label: '즐거운' },
-    { id: 'Gaegu', label: '개구쟁이' },
-    { id: 'gothic', label: '고딕', family: 'Pretendard, system-ui, sans-serif' }
-  ];
+  // 라벨 출력 폰트는 항상 Galmuri11(도트 픽셀폰트, LCD와 동일) 고정 — 폰트 선택 UI 폐기.
+  // 사진 텍스처 폐기와 함께 Jua/Gaegu도 더 이상 쓰지 않는다(render.js가 항상 Galmuri11로 그림).
   const TAPE_OPTIONS = [
     { id: '#FFFFFF', label: '화이트' },
     { id: '#FFF3DA', label: '크림' },
@@ -201,7 +241,6 @@
     { id: 'square', label: '정사각' }
   ];
   const SETTING_CATEGORIES = [
-    { key: 'font', label: '폰트', options: FONT_OPTIONS },
     { key: 'tape', label: '테이프색', options: TAPE_OPTIONS },
     { key: 'frame', label: '프레임', options: FRAME_OPTIONS },
     { key: 'size', label: '사이즈', options: SIZE_OPTIONS }
@@ -210,13 +249,12 @@
   const state = {
     tokens: [],
     composer: new HangulComposer(),
-    kbLayer: 'hangul',       // 'hangul' | 'english' — 실제 배경이미지/좌표맵 전환
+    kbLayer: 'hangul',       // 'hangul' | 'english' | 'emoji' — 실제 배경이미지/좌표맵 전환
+    prevTextLayer: 'hangul', // 이모지 레이어 진입 전 텍스트 레이어('hangul'|'english') 기억 — 복귀용
     shift: false,            // 한글: 쌍자음, 영문: 대소문자
-    symbolOpen: false,       // 기호 오버레이 패널 표시 여부
     // LCD 표시 모드: 'text' | 'settings' | 'confirm'
     mode: 'text',
     settingIndex: 0,
-    fontIdx: 0,
     tapeIdx: 0,
     frameIdx: 0,
     sizeIdx: 0,
@@ -239,10 +277,6 @@
     return n;
   }
 
-  function currentFont() {
-    const opt = FONT_OPTIONS[state.fontIdx];
-    return opt.family || opt.id;
-  }
   function currentTape() { return TAPE_OPTIONS[state.tapeIdx].id; }
   function currentFrame() { return FRAME_OPTIONS[state.frameIdx].id; }
   function currentSize() { return SIZE_OPTIONS[state.sizeIdx].id; }
@@ -265,7 +299,7 @@
   function removeLastChar() {
     const last = state.tokens[state.tokens.length - 1];
     if (!last) return;
-    if (last.type === 'glyph') {
+    if (last.type === 'glyph' || last.type === 'emoji') {
       state.tokens.pop();
     } else if (last.type === 'text') {
       if (last.value.length > 0) {
@@ -278,17 +312,11 @@
     state.caret = totalDisplayLength();
   }
 
-  function insertGlyph(id) {
+  // 이모지 키(emoji:xxx) 입력 — 기존 글리프 토큰 방식과 동일한 패턴으로 텍스트 버퍼에
+  // { type:'emoji', id } 토큰을 삽입한다. id는 EMOJI_SPRITES의 키(스프라이트 파일명).
+  function insertEmoji(id) {
     flushComposer();
-    state.tokens.push({ type: 'glyph', id });
-    state.caret = totalDisplayLength();
-    renderLcd();
-  }
-
-  function insertSymbolText(str) {
-    flushComposer();
-    const tok = getOrCreateLastTextToken();
-    tok.value += str;
+    state.tokens.push({ type: 'emoji', id });
     state.caret = totalDisplayLength();
     renderLcd();
   }
@@ -429,6 +457,10 @@
         const target = remaining > 0 ? beforeFrag : afterFrag;
         target.appendChild(makeGlyphIcon(tok.id));
         if (remaining > 0) remaining -= 1;
+      } else if (tok.type === 'emoji') {
+        const target = remaining > 0 ? beforeFrag : afterFrag;
+        target.appendChild(makeEmojiIcon(tok.id));
+        if (remaining > 0) remaining -= 1;
       }
     }
 
@@ -491,7 +523,7 @@
     lcdCursorEl.hidden = true;
     lcdTrackEl.style.transform = 'translateX(0)';
     const cat = SETTING_CATEGORIES[state.settingIndex];
-    const idxKeyMap = { font: 'fontIdx', tape: 'tapeIdx', frame: 'frameIdx', size: 'sizeIdx' };
+    const idxKeyMap = { tape: 'tapeIdx', frame: 'frameIdx', size: 'sizeIdx' };
     const curIdx = state[idxKeyMap[cat.key]];
     const opt = cat.options[curIdx];
 
@@ -565,13 +597,27 @@
     return wrap;
   }
 
+  // 이모지 스프라이트를 LCD 텍스트 흐름 안에 인라인으로 표시(줄 높이에 맞춘 작은 이미지).
+  function makeEmojiIcon(id) {
+    const wrap = document.createElement('span');
+    wrap.className = 'lcd-emoji';
+    const src = EMOJI_SPRITES[id];
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = '';
+      wrap.appendChild(img);
+    }
+    return wrap;
+  }
+
   // --------------------------------------------------------------------
   // 온스크린 키보드 히트존 렌더 (사진 위 투명 버튼만, 좌표는 % 인라인 스타일)
   // --------------------------------------------------------------------
   const keyboardEl = document.getElementById('keyboard');
   const machineEl = document.getElementById('machine');
   const machineImgEl = document.getElementById('machineImg');
-  const MACHINE_IMG_SRC = { hangul: 'assets/kr_trim.png', english: 'assets/en_trim.png' };
+  const MACHINE_IMG_SRC = { hangul: 'assets/kr_trim.png', english: 'assets/en_trim.png', emoji: 'assets/emoji_trim.png' };
 
   function applyRect(el, rect) {
     el.style.left = rect.left + '%';
@@ -585,6 +631,11 @@
     const layout = keyboardLayout(state.kbLayer);
 
     for (const item of layout) {
+      // R3_EMOJI의 9번째 칸처럼 사진에 아이콘 자체가 없는 완전 빈 키캡은 key:null로 표시되고
+      // 렌더 대상에서 제외한다(히트존 자체를 만들지 않음 — 클릭해도 아무 반응 없는 죽은
+      // 버튼보다, 애초에 존재하지 않는 편이 정직하다).
+      if (item.key === null) continue;
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'keyzone';
@@ -607,15 +658,18 @@
   }
 
   function isKeyDisabled(key) {
-    // 이 기기의 물리 키에는 존재하지 않는 로직 전용 키는 없음(전부 사진에 실존).
+    // 이모지 레이어에서는 Shift가 의미 없다(대소문자/쌍자음 전환 대상이 없음) — 비활성 처리.
+    if (state.kbLayer === 'emoji' && key === 'shift') return true;
     return false;
   }
 
   function keyAriaLabel(key) {
+    if (typeof key === 'string' && key.indexOf('emoji:') === 0) {
+      return '이모지 삽입';
+    }
     switch (key) {
       case 'del_cancel': return '삭제 취소';
-      case 'emoji': return '이모티콘';
-      case 'symbol': return 'Symbol';
+      case 'emoji': return state.kbLayer === 'emoji' ? '가나다 복귀' : '이모티콘';
       case 'backspace': return '백스페이스';
       case 'shift': return 'Shift';
       case 'lang_toggle': return '한/영 전환';
@@ -663,9 +717,14 @@
       playKeySound(key);
       return;
     }
-    if (key === 'emoji' || key === 'symbol') {
-      toggleSymbolOverlay();
+    if (key === 'emoji') {
+      toggleEmojiLayer();
       playKeySound(key);
+      return;
+    }
+    if (typeof key === 'string' && key.indexOf('emoji:') === 0) {
+      insertEmoji(key.slice('emoji:'.length));
+      window.LabelSound && window.LabelSound.playKey();
       return;
     }
     if (key === 'left') {
@@ -747,9 +806,7 @@
 
   function cycleSettingValue(dir) {
     const cat = SETTING_CATEGORIES[state.settingIndex];
-    if (cat.key === 'font') {
-      state.fontIdx = (state.fontIdx + dir + FONT_OPTIONS.length) % FONT_OPTIONS.length;
-    } else if (cat.key === 'tape') {
+    if (cat.key === 'tape') {
       state.tapeIdx = (state.tapeIdx + dir + TAPE_OPTIONS.length) % TAPE_OPTIONS.length;
     } else if (cat.key === 'frame') {
       state.frameIdx = (state.frameIdx + dir + FRAME_OPTIONS.length) % FRAME_OPTIONS.length;
@@ -761,15 +818,32 @@
   function toggleLang() {
     flushComposer();
     renderLcd();
-    state.kbLayer = state.kbLayer === 'hangul' ? 'english' : 'hangul';
+    // 이모지 레이어 중에 한/영 키를 누르면(R5는 공용 좌표라 이모지 레이어에도 존재)
+    // 텍스트 레이어를 전환하면서 동시에 이모지 레이어를 빠져나간다 — 그 반대(이모지 레이어
+    // 진입 중 유지)는 의미가 없으므로 자연스럽게 텍스트 모드로 복귀.
+    const base = state.kbLayer === 'emoji' ? state.prevTextLayer : state.kbLayer;
+    state.kbLayer = base === 'hangul' ? 'english' : 'hangul';
+    state.prevTextLayer = state.kbLayer;
     state.shift = false;
     machineImgEl.src = MACHINE_IMG_SRC[state.kbLayer];
     renderKeyboard();
   }
 
-  function toggleSymbolOverlay() {
-    state.symbolOpen = !state.symbolOpen;
-    symbolOverlayEl.hidden = !state.symbolOpen;
+  // 이모티콘 키: 한/영 전환과 동일한 방식(이미지 src 교체 + 좌표맵 교체)으로 3번째
+  // 키보드 이미지 레이어(assets/emoji_trim.png)를 켜고 끈다. 다시 누르면(이 키는 이모지
+  // 레이어 안에서 "가나다" 복귀 라벨 역할) 직전 텍스트 레이어(한글/영문)로 되돌아간다.
+  function toggleEmojiLayer() {
+    flushComposer();
+    if (state.kbLayer === 'emoji') {
+      state.kbLayer = state.prevTextLayer;
+    } else {
+      state.prevTextLayer = state.kbLayer; // hangul 또는 english 기억
+      state.kbLayer = 'emoji';
+      state.shift = false;
+    }
+    machineImgEl.src = MACHINE_IMG_SRC[state.kbLayer];
+    renderKeyboard();
+    renderLcd();
   }
 
   function addPressFeedback(btn) {
@@ -903,59 +977,14 @@
 
   document.addEventListener('pointerdown', (e) => {
     const target = e.target;
-    if (target.closest('.keyzone') || target.closest('.symbol-btn') || target.closest('button') || target === hiddenInput) return;
-    focusHiddenInputSilently();
-  });
-
-  // --------------------------------------------------------------------
-  // 기호 오버레이 패널
-  // --------------------------------------------------------------------
-  const symbolOverlayEl = document.getElementById('symbolOverlay');
-  const symbolGridEl = document.getElementById('symbolGrid');
-  const symbolCloseBtn = document.getElementById('symbolCloseBtn');
-
-  function renderSymbolGrid() {
-    symbolGridEl.innerHTML = '';
-    for (const ch of SYMBOL_CHARS) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'symbol-btn';
-      btn.textContent = ch;
-      btn.setAttribute('aria-label', '기호 ' + ch + ' 삽입');
-      addPressFeedback(btn);
-      btn.addEventListener('click', () => {
-        insertSymbolText(ch);
-        window.LabelSound && window.LabelSound.playKey();
-        focusHiddenInputSilently();
-      });
-      symbolGridEl.appendChild(btn);
-    }
-    for (const g of GLYPH_LIST) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'symbol-btn';
-      btn.innerHTML = window.Glyphs[g.id] || '';
-      btn.setAttribute('aria-label', g.label + ' 삽입');
-      addPressFeedback(btn);
-      btn.addEventListener('click', () => {
-        insertGlyph(g.id);
-        window.LabelSound && window.LabelSound.playKey();
-        focusHiddenInputSilently();
-      });
-      symbolGridEl.appendChild(btn);
-    }
-  }
-
-  symbolCloseBtn.addEventListener('click', () => {
-    state.symbolOpen = false;
-    symbolOverlayEl.hidden = true;
+    if (target.closest('.keyzone') || target.closest('button') || target === hiddenInput) return;
     focusHiddenInputSilently();
   });
 
   // --------------------------------------------------------------------
   // 사운드 도우미 — 기능키는 낮은 톤, 일반 키는 기본 톤
   // --------------------------------------------------------------------
-  const LOW_TONE_KEYS = new Set(['space', 'backspace', 'del_cancel', 'lang_toggle', 'emoji', 'symbol', 'shift', 'left', 'right', 'up', 'down', 'enter']);
+  const LOW_TONE_KEYS = new Set(['space', 'backspace', 'del_cancel', 'lang_toggle', 'emoji', 'shift', 'left', 'right', 'up', 'down', 'enter']);
   function playKeySound(key) {
     if (!window.LabelSound) return;
     if (LOW_TONE_KEYS.has(key)) {
@@ -1016,17 +1045,21 @@
     focusHiddenInputSilently();
   });
 
+  // 라벨 출력 폰트는 항상 Galmuri11 고정(render.js), 여기서는 폰트를 넘기지 않는다.
   function buildRenderOpts(scale) {
     return {
       tokens: cloneTokens(state.tokens),
       tapeColor: currentTape(),
-      fontFamily: currentFont(),
-      textColor: '#5B4A3F',
       frame: currentFrame(),
       size: currentSize(),
       scale
     };
   }
+
+  // 스텝형 급지 리듬의 keyframe 퍼센트 지점(print-winch의 "훅 올라옴" 시작점들, css/style.css
+  // @keyframes print-winch와 동일한 8/16/24/.../88/100 12스텝). 사운드를 이 퍼센트 지점마다
+  // 재생해 "두두두" 시각 연출과 청각을 동기화한다.
+  const RATTLE_STEP_PCTS = [0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88];
 
   async function startPrint() {
     window.LabelSound && window.LabelSound.init();
@@ -1034,33 +1067,58 @@
     state.isPrinting = true;
     printBtn.disabled = true;
 
-    window.LabelSound && window.LabelSound.playPrintStart();
-    machineEl.classList.add('is-shaking');
-    setTimeout(() => machineEl.classList.remove('is-shaking'), 1400);
-
-    const rattleSteps = [0, 12, 25, 38, 52, 66, 80];
-    rattleSteps.forEach((pct) => {
-      setTimeout(() => {
-        window.LabelSound && window.LabelSound.playPrintRattleStep();
-      }, (pct / 100) * 1400);
-    });
-
     labelDownloadBtn.hidden = true;
     labelCanvas.classList.remove('is-printing');
-    void labelCanvas.offsetWidth;
+    labelCanvas.classList.remove('is-visible');
+    void labelCanvas.offsetWidth; // 강제 리플로우 — 클래스 제거가 먼저 반영되게 함
 
-    await window.LabelRenderer.drawLabel(labelCanvas, buildRenderOpts(2));
+    const { width, height, lineCount } = await window.LabelRenderer.drawLabel(labelCanvas, buildRenderOpts(2));
 
-    requestAnimationFrame(() => {
-      labelCanvas.classList.add('is-printing');
+    // 화면 표시 크기 반영: 멀티라인으로 캔버스가 세로로 길어진 만큼, 화면에 보이는
+    // label-canvas 엘리먼트도 실제 렌더 비율(width:height)에 맞춰 커진다.
+    // max-width(92cqw, CSS)는 그대로 상한으로 유지 — width 지정 후 height:auto로 비율 유지.
+    labelCanvas.style.width = width + 'px';
+    labelCanvas.style.height = height + 'px';
+
+    // 줄 수에 비례해 급지 애니메이션 총 시간 결정: 기본 2000ms + 줄당 250ms.
+    const lines = Math.max(1, lineCount || 1);
+    const totalMs = 2000 + (lines - 1) * 250;
+    machineEl.style.setProperty('--anim-print', totalMs + 'ms');
+    labelCanvas.style.setProperty('--anim-print', totalMs + 'ms');
+
+    window.LabelSound && window.LabelSound.playPrintStart();
+    machineEl.classList.add('is-shaking');
+    setTimeout(() => machineEl.classList.remove('is-shaking'), totalMs);
+
+    // 드르륵 스텝 사운드 — CSS keyframe 퍼센트와 동일한 지점에서, 실제 totalMs 기준으로
+    // setTimeout 시퀀스 재생(음소거 연동은 LabelSound.playPrintRattleStep 내부에서 처리).
+    RATTLE_STEP_PCTS.forEach((pct) => {
+      setTimeout(() => {
+        window.LabelSound && window.LabelSound.playPrintRattleStep();
+      }, (pct / 100) * totalMs);
     });
 
+    // rAF에 의존하지 않고 CSS 트랜지션을 확실히 트리거한다(헤드리스 환경에서 rAF가
+    // 스로틀되는 문제 회피, DEVLOG 2026-07-05(4차) 기록 참고). is-visible이 먼저
+    // display:block을 만들고, 강제 리플로우 후 is-printing을 붙여 트랜지션 시작점을
+    // 브라우저가 확실히 인식하게 한다. setTimeout(0)은 페인트 유예를 위한 최소한의 매크로태스크.
+    labelCanvas.classList.add('is-visible');
+    void labelCanvas.offsetWidth;
     setTimeout(() => {
+      labelCanvas.classList.add('is-printing');
+    }, 0);
+
+    setTimeout(() => {
+      // 애니메이션이 끝까지 재생됐든(정상 브라우저), 타이머가 멈춰 0%에 머물렀든(헤드리스
+      // 환경, DEVLOG 2026-07-05(4차) 기록과 동일한 rAF/애니메이션 타이머 스로틀 한계) —
+      // 여기서 is-printing을 떼어내면 남은 is-visible 하나만으로 "슬롯 위 최종 정지 상태"
+      // (기본 transform: translateY(0) rotateX(0), opacity:1)에 무조건 도달한다.
+      labelCanvas.classList.remove('is-printing');
       showToast();
       labelDownloadBtn.hidden = false;
       state.isPrinting = false;
       printBtn.disabled = false;
-    }, 1400);
+    }, totalMs);
   }
 
   function cloneTokens(tokens) {
@@ -1078,7 +1136,39 @@
 
   labelDownloadBtn.addEventListener('click', async () => {
     await window.LabelRenderer.downloadLabelPng(buildRenderOpts(3));
+    resetToInitialScreen();
   });
+
+  // PNG 저장(다운로드 트리거) 후 처음 화면으로 리셋 — 사용자가 바로 새 라벨을 쓸 수 있게.
+  // 텍스트 버퍼/토큰/caret을 비우고, 출력된 라벨 엘리먼트를 제거하고, PNG 저장 버튼을
+  // 숨기고, LCD를 초기 플레이스홀더로, mode를 text로, 키보드 레이어를 한글 기본으로 되돌린다.
+  function resetToInitialScreen() {
+    handleClearAll(); // tokens/composer/caret 비움 + renderLcd() 호출
+
+    state.mode = 'text';
+    state.confirmSource = null;
+
+    // 출력된 라벨 엘리먼트 제거: is-visible/is-printing 클래스 해제 + display:none으로
+    // 되돌리고, 캔버스 픽셀도 지워 다음 렌더 전까지 잔상이 안 남게 한다.
+    labelCanvas.classList.remove('is-visible', 'is-printing');
+    labelCanvas.style.width = '';
+    labelCanvas.style.height = '';
+    const lctx = labelCanvas.getContext('2d');
+    if (lctx) lctx.clearRect(0, 0, labelCanvas.width, labelCanvas.height);
+
+    labelDownloadBtn.hidden = true;
+
+    // 키보드 레이어를 한글 기본으로 복귀(영문/이모지 상태로 저장했을 수 있으므로).
+    if (state.kbLayer !== 'hangul') {
+      state.kbLayer = 'hangul';
+      state.prevTextLayer = 'hangul';
+      state.shift = false;
+      machineImgEl.src = MACHINE_IMG_SRC.hangul;
+      renderKeyboard();
+    }
+
+    renderLcd();
+  }
 
   // --------------------------------------------------------------------
   // 음소거 아이콘 토글
@@ -1103,7 +1193,6 @@
     buildGlyphSvgStrings();
     renderOvals();
     renderKeyboard();
-    renderSymbolGrid();
     renderLcd();
     syncMuteBtn();
     focusHiddenInputSilently();

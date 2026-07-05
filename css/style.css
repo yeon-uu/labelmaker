@@ -92,13 +92,19 @@ button {
   outline-offset: 2px;
 }
 
+/* 뷰포트 세로 중앙 근처 배치. min-height:100vh + justify-content:center로 기기를 화면
+   중앙에 놓되, 출력 라벨이 슬롯 위로 올라올 공간을 확보하려고 기기 위쪽에 여유를 더 둔다
+   (아래 padding-top이 title 높이만큼 더 커서 기기가 정중앙보다 살짝 아래에 위치).
+   콘텐츠가 뷰포트보다 길어지면(작은 화면) 세로 스크롤은 허용, 375px 가로 스크롤은 없음. */
 .page {
   max-width: 720px;
   margin: 0 auto;
-  padding: var(--sp-24) var(--sp-16) var(--sp-48);
+  min-height: 100vh;
+  padding: var(--sp-48) var(--sp-16) var(--sp-48);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   position: relative;
 }
 
@@ -169,17 +175,24 @@ button {
 }
 
 /* ==========================================================================
-   라벨 출력 슬롯 — overflow:hidden 클리핑. 라벨은 이 컨테이너 안에서만 보이고
-   슬롯 틈 위로 빠져나오는 것처럼 연출한다.
+   라벨 출력 슬롯 — overflow:hidden 클리핑. 라벨은 슬롯 라인(top 6.19%)에서
+   위쪽(기기 바깥, 세로 음수 방향)으로 올라와 슬롯 위에 서고, 슬롯 아래(기기 안쪽 =
+   LCD/키보드가 있는 영역)는 클립으로 완전히 가려진다.
    실측(트림 이미지 다크라인 픽셀 스캔): left 18.43% top 6.19% width 62.5% height 0.76%.
-   클립 컨테이너 높이는 핑크 버튼 중심(20.01%)까지.
-   ========================================================================== */
+
+   이전 버전의 버그: 클립 컨테이너가 top:0%~height:20.01%(기기 내부, LCD 상단부와 겹치는
+   영역)였다. label-output이 그 안 bottom:0(=20.01% 지점)에 고정돼 있어 라벨이 사실상
+   LCD 위에 뜬 것처럼 보였다 — "슬롯에서 위로 나온다"는 요구와 반대 방향의 배치였다.
+   수정: 클립 컨테이너의 bottom을 슬롯 라인(top 6.19%)에 정확히 맞추고(즉 컨테이너 자체가
+   기기 상단 바깥 음수 top부터 슬롯 라인까지), label-output을 그 컨테이너의 bottom:0(=슬롯
+   라인)에 고정한다. 라벨이 위로 자랄수록(줄 많음) 슬롯 라인에서 더 높이, 완전히 기기
+   바깥(위)으로만 뻗어나가고 슬롯 아래로는 단 1px도 새지 않는다. */
 .machine-slot-clip {
   position: absolute;
   left: 18.43%;
-  top: 0%;
+  top: -120%;     /* 기기 위쪽으로 충분히 확장 — 멀티라인 긴 라벨도 다 담김 */
+  bottom: 93.81%; /* = 100% - 6.19%(슬롯 라인) : 컨테이너 하단이 슬롯 라인에 정확히 맞물림 */
   width: 62.5%;
-  height: 20.01%; /* 핑크 버튼 중심(20.01%)까지 */
   overflow: hidden;
   pointer-events: none;
   perspective: 300px;
@@ -188,88 +201,123 @@ button {
 .machine-slot {
   position: absolute;
   left: 0;
-  top: 6.19%;
+  bottom: 0;
   width: 100%;
-  height: 0.76%;
+  height: 3px;
 }
 
 .machine-slot-clip::after {
   content: '';
   position: absolute;
   left: 8%;
-  top: 6.19%;
+  bottom: -2%;
   width: 84%;
   height: 6%;
   background: radial-gradient(ellipse at center, rgba(58, 51, 48, 0.10) 0%, transparent 75%);
   pointer-events: none;
 }
 
+/* label-output 자체는 슬롯 클립 컨테이너(overflow:hidden) 하단(bottom:0 = 슬롯 라인)에
+   고정한다 — 이게 라벨의 "최종 정지" 위치다. 안 보이는 시작 상태(슬롯 틈 아래로 숨음)는
+   .label-canvas의 transform(translateY 양수, 아래로 이동)으로 표현하므로,
+   translateY(0)이 곧 "슬롯 라인 위, 최종적으로 보이는 위치"가 된다. */
 .label-output {
   position: absolute;
   left: 50%;
-  bottom: -100%;
+  bottom: 0;
   transform: translateX(-50%);
   display: flex;
   justify-content: center;
   transform-style: preserve-3d;
 }
 
+/* max-height 제한을 없애 멀티라인(영수증형) 라벨이 늘어난 만큼 화면 표시 크기도
+   비례해서 커지게 한다. width는 캔버스의 실제 픽셀 비율(width/height)에 따라
+   자동 결정(height:auto + width:auto 조합, 실제 렌더 크기는 JS가 canvas.style로 지정). */
 .label-canvas {
-  width: auto;
-  height: auto;
-  max-width: 92%;
-  max-height: 120px;
   border-radius: var(--radius-label);
   box-shadow: 0 2px 6px rgba(58, 51, 48, 0.08);
   display: none;
   transform: translateY(0) rotateX(0deg);
   transform-origin: 50% 100%;
+  opacity: 1;
+  max-width: 92cqw;
 }
 
 /* ==========================================================================
    출력 모션 — "감기며 올라오는" 리듬(6~8단계) + 상단 모서리 말림 + 오버슈트.
+   is-visible: display:block + 최종 정지 상태(translateY(0), opacity 1)를 클래스 토글만으로
+   즉시 도달시킨다 — 애니메이션이 전혀 실행되지 않는 환경(rAF 스로틀 등)에서도 라벨이
+   반드시 슬롯 위에 "보이는" 상태에 도달하도록 하기 위한 안전장치.
+   is-printing: is-visible과 함께 붙으면 keyframe 애니메이션이 시작 프레임부터 재생되어
+   "감기며 올라오는" 연출을 더한다. CSS keyframes 기반이라 rAF 의존이 없다.
    ========================================================================== */
-.label-canvas.is-printing {
+.label-canvas.is-visible {
   display: block;
-  animation: print-winch var(--anim-print) cubic-bezier(0.3, 0, 0.2, 1) forwards;
 }
 
+.label-canvas.is-printing {
+  display: block;
+  animation: print-winch var(--anim-print) linear forwards;
+}
+
+/* 감열 프린터 급지 연출 — "두두두" 단계적 스텝. 매끈한 이징 대신 각 단계마다
+   "훅 올라옴 → 아주 짧게 멈칫"을 12단계 반복한다(요청 범위 10~14단계).
+   각 스텝은 급격한 이동 구간(약 60%)과 정지 구간(약 40%)으로 나뉘어 "멈칫" 느낌을 낸다.
+   마지막에 살짝 오버슈트(-4%) 후 정착. 총 재생 시간은 --anim-print(JS가 줄 수에 비례해
+   동적으로 설정, style.js 인라인)로 제어. */
 @keyframes print-winch {
-  0%   { transform: translateY(230%) rotateX(4deg);  opacity: 0; }
-  4%   { opacity: 1; }
-  12%  { transform: translateY(190%) rotateX(4deg); }
-  13%  { transform: translateY(188%) rotateX(3.6deg); }
-  25%  { transform: translateY(150%) rotateX(3.6deg); }
-  26%  { transform: translateY(148%) rotateX(3.2deg); }
-  38%  { transform: translateY(112%) rotateX(3.2deg); }
-  39%  { transform: translateY(110%) rotateX(2.6deg); }
-  52%  { transform: translateY(78%) rotateX(2.6deg); }
-  53%  { transform: translateY(76%) rotateX(2deg); }
-  66%  { transform: translateY(46%) rotateX(2deg); }
-  67%  { transform: translateY(44%) rotateX(1.2deg); }
-  80%  { transform: translateY(18%) rotateX(0.6deg); }
-  90%  { transform: translateY(-4%) rotateX(0deg); }
-  96%  { transform: translateY(2%) rotateX(0deg); }
-  100% { transform: translateY(0%) rotateX(0deg); opacity: 1; }
+  0%    { transform: translateY(230%) rotateX(4deg);   opacity: 0; }
+  3%    { opacity: 1; }
+  8%    { transform: translateY(210%) rotateX(4deg); }
+  9%    { transform: translateY(210%) rotateX(3.8deg); } /* 1스텝 멈칫 */
+  16%   { transform: translateY(189%) rotateX(3.8deg); }
+  17%   { transform: translateY(189%) rotateX(3.6deg); } /* 2스텝 멈칫 */
+  24%   { transform: translateY(168%) rotateX(3.6deg); }
+  25%   { transform: translateY(168%) rotateX(3.4deg); } /* 3스텝 멈칫 */
+  32%   { transform: translateY(147%) rotateX(3.2deg); }
+  33%   { transform: translateY(147%) rotateX(3.0deg); } /* 4스텝 멈칫 */
+  40%   { transform: translateY(126%) rotateX(2.8deg); }
+  41%   { transform: translateY(126%) rotateX(2.6deg); } /* 5스텝 멈칫 */
+  48%   { transform: translateY(105%) rotateX(2.4deg); }
+  49%   { transform: translateY(105%) rotateX(2.2deg); } /* 6스텝 멈칫 */
+  56%   { transform: translateY(84%) rotateX(2.0deg); }
+  57%   { transform: translateY(84%) rotateX(1.8deg); }  /* 7스텝 멈칫 */
+  64%   { transform: translateY(63%) rotateX(1.6deg); }
+  65%   { transform: translateY(63%) rotateX(1.4deg); }  /* 8스텝 멈칫 */
+  72%   { transform: translateY(42%) rotateX(1.2deg); }
+  73%   { transform: translateY(42%) rotateX(1.0deg); }  /* 9스텝 멈칫 */
+  80%   { transform: translateY(24%) rotateX(0.7deg); }
+  81%   { transform: translateY(24%) rotateX(0.6deg); }  /* 10스텝 멈칫 */
+  88%   { transform: translateY(9%) rotateX(0.3deg); }
+  89%   { transform: translateY(9%) rotateX(0.2deg); }   /* 11스텝 멈칫 */
+  95%   { transform: translateY(-4%) rotateX(0deg); }    /* 오버슈트 */
+  100%  { transform: translateY(0%) rotateX(0deg); opacity: 1; } /* 12스텝 정착 */
 }
 
 /* ==========================================================================
    기기 본체 흔들림(wobble) — 인쇄 사운드(드르륵)의 6~8스텝 타이밍과 동기화.
    ========================================================================== */
 .machine.is-shaking {
-  animation: machine-wobble var(--anim-print) ease-out;
+  animation: machine-wobble var(--anim-print) linear;
   transform-origin: 50% 100%;
 }
 
+/* print-winch의 12스텝 급지 리듬과 맞춘 흔들림 — 각 "훅 올라옴" 지점(8/16/24...%)에서
+   툭 튀는 느낌을 준다. */
 @keyframes machine-wobble {
   0%   { transform: translateX(0) rotate(0deg); }
-  12%  { transform: translateX(-2px) rotate(-1.5deg); }
-  25%  { transform: translateX(2px) rotate(1.5deg); }
-  38%  { transform: translateX(-2px) rotate(-1.2deg); }
-  52%  { transform: translateX(2px) rotate(1deg); }
-  66%  { transform: translateX(-1px) rotate(-0.6deg); }
-  80%  { transform: translateX(1px) rotate(0.4deg); }
-  90%  { transform: translateX(0) rotate(0deg); }
+  8%   { transform: translateX(-2px) rotate(-1.2deg); }
+  16%  { transform: translateX(2px) rotate(1.2deg); }
+  24%  { transform: translateX(-2px) rotate(-1deg); }
+  32%  { transform: translateX(2px) rotate(1deg); }
+  40%  { transform: translateX(-1.5px) rotate(-0.8deg); }
+  48%  { transform: translateX(1.5px) rotate(0.8deg); }
+  56%  { transform: translateX(-1px) rotate(-0.6deg); }
+  64%  { transform: translateX(1px) rotate(0.6deg); }
+  72%  { transform: translateX(-1px) rotate(-0.4deg); }
+  80%  { transform: translateX(1px) rotate(0.3deg); }
+  88%  { transform: translateX(-0.5px) rotate(-0.15deg); }
   100% { transform: translateX(0) rotate(0deg); }
 }
 
@@ -301,13 +349,12 @@ button {
   align-items: center;
   overflow: hidden;
   font-family: 'Galmuri11', 'NeoDunggeunmo', 'DungGeunMo', 'DotGothic16', monospace;
-  /* 초록칸 실제 높이의 약 40% 내외, 가로로 7~9글자가 보이는 크기(요청 범위) —
-     .machine이 container-type:inline-size라 cqw 단위가 기기 자체 폭(뷰포트가 아니라)에
-     비례해 스케일된다. 기존 9.9cqw(≈51px, 세로로 삐져나옴)에서 축소.
-     6cqw ≈ 기기 520px 기준 31.2px — 뷰포트 실측 폭(약 264px, 좌우 패딩 12px씩 제외)에
-     한글 기준 약 7~8글자가 들어가고, 텍스트 rect 높이가 LCD rect 안에 완전히 포함됨을
-     preview_eval로 확인(자간 포함 실측치, em-box 여백으로 시각 높이는 폰트크기보다 작게 보임). */
-  font-size: 6cqw;
+  /* 초록칸 실제 높이의 약 33% 내외로 재축소(기존 6cqw는 초록칸 위아래 경계에 살짝 닿는
+     em-box 여백 문제가 있었음). .machine이 container-type:inline-size라 cqw 단위가
+     기기 자체 폭(뷰포트가 아니라)에 비례해 스케일된다.
+     5cqw ≈ 기기 520px 기준 26px — 위아래 여백을 확보하면서도 가로 글자 수는 6~7자 유지.
+     preview_eval로 텍스트 rect가 LCD rect 안쪽 여백을 두고 포함됨을 재검증한다. */
+  font-size: 5cqw;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -333,7 +380,7 @@ button {
   justify-content: center;
   width: 100%;
   gap: 2px;
-  font-size: 3.6cqw;
+  font-size: 3cqw;
   line-height: 1.25;
   white-space: nowrap;
 }
@@ -514,73 +561,35 @@ button {
   width: 100%;
   height: 100%;
   z-index: 2;
+  /* 컨테이너 자체는 기기 전체를 덮는 빈 배경 div라, pointer-events를 열어두면
+     DOM 순서상 뒤에 오는 이 컨테이너가 같은 z-index의 .machine-ovals(오벌 5개 히트존,
+     환경 버튼 포함)를 가려 클릭을 가로챈다("환경 버튼이 안 눌린다" 버그의 원인).
+     컨테이너는 클릭을 투과시키고, 실제 키 히트존(.keyzone)에만 다시 pointer-events:auto로
+     활성화한다. */
+  pointer-events: none;
+}
+
+.machine-keyboard .keyzone {
+  pointer-events: auto;
 }
 
 /* ==========================================================================
-   기호 모드 오버레이 패널 — 사진이 없는 계층이라 반투명 CSS 그리드로 덮는다.
-   콤보 없음, 개별 문자/글리프만. 크림 팔레트, 라운드 스타일.
-   R2 상단(51.768%)부터 R5 하단(86.238%)까지 키보드 전체를 덮는다.
+   LCD 인라인 이모지 아이콘 — 텍스트 흐름 안에 작게 삽입되는 이모지 스프라이트.
+   기존에 떠 있던 CSS 기호 오버레이 패널(.symbol-overlay 등)은 완전히 폐기하고,
+   이모티콘은 3번째 키보드 이미지 레이어(assets/emoji_trim.png)로 대체했다.
    ========================================================================== */
-.symbol-overlay {
-  position: absolute;
-  left: 5.20%;
-  top: 51.768%;
-  width: 88.60%;
-  height: 34.47%;
-  background: rgba(255, 251, 242, 0.96);
-  border: 1px solid var(--border);
-  border-radius: var(--sp-12);
-  z-index: 4;
-  box-shadow: 0 2px 10px rgba(58, 51, 48, 0.12);
-  padding: var(--sp-8);
+.lcd-emoji {
+  display: inline-flex;
+  vertical-align: middle;
+  width: 1em;
+  height: 1em;
 }
 
-.symbol-close {
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1;
-  padding: 0;
-}
-
-.symbol-grid {
+.lcd-emoji img {
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  grid-auto-rows: 1fr;
-  gap: 2px;
-  padding-top: 16px;
-}
-
-.symbol-btn {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: var(--sp-4);
-  color: var(--text);
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: transform var(--dur-key) ease, filter var(--dur-key) ease;
-}
-
-.symbol-btn svg {
-  width: 55%;
-  height: 55%;
-}
-
-.symbol-btn:active,
-.symbol-btn.is-pressed {
-  transform: scale(0.92);
-  filter: brightness(0.94);
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 /* ==========================================================================
@@ -608,17 +617,22 @@ button {
   max-width: 280px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--sp-8);
 }
 
+/* PNG 저장 버튼 — 도트폰트(Galmuri11)로 작고 귀여운 스티커/칩 느낌.
+   기존 44px 높이의 큼직한 일반 버튼에서, 라벨이 출력된 뒤에만 작게 톡 붙는 칩으로 축소.
+   테이프 크림색 배경 + 큰 라운드(pill에 가깝게) + 저대비 보더, design-tokens 범위 내 값만 사용. */
 .label-download-btn {
-  height: var(--btn-height);
+  height: 32px;
   padding: 0 var(--sp-16);
-  border-radius: var(--radius-key);
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--tape-cream);
   color: var(--text);
-  font-size: 14px;
+  font-family: 'Galmuri11', 'NeoDunggeunmo', 'DungGeunMo', 'DotGothic16', monospace;
+  font-size: 13px;
   transition: transform var(--dur-ui) ease, filter var(--dur-ui) ease;
 }
 
@@ -665,9 +679,5 @@ button {
 @media (max-width: 400px) {
   .page {
     padding: var(--sp-16) var(--sp-12) var(--sp-32);
-  }
-
-  .symbol-btn {
-    font-size: 11px;
   }
 }
