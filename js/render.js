@@ -67,10 +67,34 @@
     const inkColor = isInvert ? tapeColor : INK;
     const contentColor = isInvert ? tapeColor : textColor;
 
-    // 라벨 배경 (둥근 사각형, 테이프 색 또는 반전 시 잉크색)
+    // 라벨 배경: 실물 라벨 텍스처(assets/label-texture.png) 클리핑 후 그 위에 테이프색을 곱연산톤으로 겹침.
+    // invert 프레임은 텍스처 대신 잉크색 단색 채움(반전 표현 유지).
     drawRoundedRect(ctx, 0, 0, width, height, radius);
-    ctx.fillStyle = isInvert ? INK : tapeColor;
-    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    if (isInvert) {
+      ctx.fillStyle = INK;
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      const tex = await loadLabelTexture();
+      if (tex) {
+        // 텍스처를 라벨 크기에 맞춰 스트레치(cover 방식: 텍스처 비율 유지하며 채움)
+        drawTextureCover(ctx, tex, width, height);
+      } else {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+      }
+      // 테이프 색 틴트: 화이트가 아니면 텍스처 위에 반투명 색 레이어를 곱해 은은하게 물들인다
+      if (tapeColor.toUpperCase() !== '#FFFFFF') {
+        ctx.globalAlpha = 0.35;
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = tapeColor;
+        ctx.fillRect(0, 0, width, height);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
 
     // 프레임 테두리 (배경 위, 텍스트 아래)
     drawFrame(ctx, frame, width, height, radius, inkColor);
@@ -79,6 +103,9 @@
     ctx.fillStyle = contentColor;
     ctx.font = `${fontSize}px "${fontFamily}", sans-serif`;
     ctx.textBaseline = 'middle';
+    // 잉크 번짐: 인쇄된 라벨(Canvas 출력)에만 미세 blur (LCD 미리보기는 별도 DOM이라 영향 없음)
+    ctx.shadowColor = contentColor;
+    ctx.shadowBlur = 0.3;
 
     const glyphSize = fontSize;
     const paddingX = 20;
@@ -141,6 +168,40 @@
     }
 
     ctx.restore();
+  }
+
+  // 실물 라벨 텍스처 이미지 로드 (1회만, 캐시)
+  let _labelTexturePromise = null;
+  function loadLabelTexture() {
+    if (_labelTexturePromise) return _labelTexturePromise;
+    _labelTexturePromise = new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = 'assets/label-texture.png';
+    });
+    return _labelTexturePromise;
+  }
+
+  // 텍스처를 대상 사각형에 'cover' 방식으로 그린다 (비율 유지, 넘치는 부분은 잘림)
+  function drawTextureCover(ctx, img, w, h) {
+    const srcRatio = img.width / img.height;
+    const dstRatio = w / h;
+    let sx, sy, sw, sh;
+    if (srcRatio > dstRatio) {
+      // 원본이 더 넓음 -> 좌우를 자름
+      sh = img.height;
+      sw = sh * dstRatio;
+      sx = (img.width - sw) / 2;
+      sy = 0;
+    } else {
+      // 원본이 더 좁음/높음 -> 상하를 자름
+      sw = img.width;
+      sh = sw / dstRatio;
+      sx = 0;
+      sy = (img.height - sh) / 2;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
   }
 
   function drawRoundedRect(ctx, x, y, w, h, r) {

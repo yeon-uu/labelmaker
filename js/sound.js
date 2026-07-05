@@ -105,6 +105,31 @@
   }
 
   /**
+   * 핑크 버튼 전용 "딸깍" 클릭음: 아주 짧은 저음 클릭(펄스 하나 + 즉시 감쇠).
+   * 일반 키음(sine 600~900Hz)과 구분되는 딱딱한 톤 — square wave 짧은 펄스.
+   */
+  function playClick() {
+    const c = ensureContext();
+    if (!c || muted) return;
+    const now = c.currentTime;
+    const dur = 0.03;
+
+    const osc = c.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(180, now);
+
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.5, now + 0.002);
+    gain.gain.linearRampToValueAtTime(0, now + dur);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + dur + 0.01);
+  }
+
+  /**
    * 출력 시작음: 낮은 주파수에서 살짝 올라가는 짧은 스윕 (100~200ms).
    */
   function playPrintStart() {
@@ -196,6 +221,7 @@
     init,
     playKey: playKeyNormal,
     playKeyLow,
+    playClick,
     playPrintStart,
     playPrintRattle,
     playPrintRattleStep,

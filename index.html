@@ -6,41 +6,64 @@
 <title>라벨메이커 — 가상 라벨프린터</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gaegu:wght@400;700&family=DotGothic16&display=swap" rel="stylesheet">
+<!-- LCD 전용 한글 픽셀/비트맵 폰트 (출력 라벨 Jua/Gaegu와는 무관, LCD 요소에만 적용).
+     지시받은 gh/quiple/galmuri 경로는 저장소 용량(50MB) 초과로 jsDelivr GH CDN이 403을 반환해
+     대신 같은 폰트의 npm 배포판(jsDelivr npm CDN, galmuri.min.css)으로 로드한다(200 OK 확인). -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.40.3/dist/galmuri.min.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <main class="page">
   <h1 class="page-title">라벨메이커</h1>
-  <p class="page-sub">문구를 입력하고 라벨을 뽑아보세요</p>
+
+  <!-- 음소거 아이콘 토글 (그려진 버튼 없음 - 페이지 구석 작은 아이콘) -->
+  <button type="button" class="mute-icon-btn" id="muteBtn" aria-pressed="false" aria-label="음소거 토글">🔊</button>
 
   <div class="printer" id="printer">
-    <div class="machine-body" id="machineBody">
+    <div class="machine" id="machine">
+      <img class="machine-img" id="machineImg" src="assets/kr_trim.png" alt="" aria-hidden="true">
 
-      <!-- 라벨 출력 슬롯: overflow:hidden 클리핑 컨테이너. 라벨은 이 안에서만 보이며 위로 빠져나온다 -->
-      <div class="machine-slot-clip" id="machineSlotClip" aria-hidden="true">
-        <div class="machine-slot"></div>
-        <div class="label-output" id="labelOutput" aria-live="polite">
-          <canvas id="labelCanvas" class="label-canvas"></canvas>
+      <div class="machine-overlay" id="machineOverlay">
+
+        <!-- 라벨 출력 슬롯: overflow:hidden 클리핑 컨테이너. 라벨은 이 안에서만 보이며 위로 빠져나온다 -->
+        <div class="machine-slot-clip" id="machineSlotClip" aria-hidden="true">
+          <div class="machine-slot"></div>
+          <div class="label-output" id="labelOutput" aria-live="polite">
+            <canvas id="labelCanvas" class="label-canvas"></canvas>
+          </div>
         </div>
-      </div>
 
-      <!-- LCD 화면 -->
-      <div class="machine-lcd">
-        <div class="lcd-screen" id="lcdScreen" aria-live="polite">
-          <span class="lcd-placeholder" id="lcdPlaceholder">문구를 입력하세요</span>
+        <!-- LCD 화면 (픽셀폰트 DotGothic16 전용, 출력 라벨 폰트와 무관). 초록칸 실측 rect에 정확히 배치 -->
+        <div class="machine-lcd" id="machineLcd">
+          <div class="lcd-screen" id="lcdScreen" aria-live="polite">
+            <div class="lcd-track" id="lcdTrack">
+              <span class="lcd-text" id="lcdText"></span><span class="lcd-cursor" id="lcdCursor"></span>
+            </div>
+          </div>
         </div>
+
+        <!-- 핑크 원형 출력 버튼 히트존 (이미지에 이미 그려진 버튼 위 투명 오버레이) -->
+        <button type="button" class="print-hitzone" id="printBtn" aria-label="라벨 출력"></button>
+
+        <!-- 오벌 5개 히트존: 인쇄/미리보기/파일/새라벨/환경 (이미지 위 투명 오버레이) -->
+        <div class="machine-ovals" id="ovalsRow">
+          <!-- JS가 5개 버튼을 렌더링 -->
+        </div>
+
+        <!-- 온스크린 키보드 히트존 (사진 위 투명 영역만, 시각 요소 없음). 한/영 전환 시 이미지+좌표맵 통째 교체 -->
+        <div class="machine-keyboard" id="keyboard">
+          <!-- JS가 히트존 버튼들을 렌더링 -->
+        </div>
+
+        <!-- 기호 모드 오버레이 패널 (키보드 영역 위에 덮임) -->
+        <div class="symbol-overlay" id="symbolOverlay" hidden>
+          <button type="button" class="symbol-close" id="symbolCloseBtn" aria-label="기호 패널 닫기">×</button>
+          <div class="symbol-grid" id="symbolGrid"></div>
+        </div>
+
       </div>
-
-      <!-- 핑크 원형 출력 버튼 히트존 (이미지에 이미 그려진 버튼 위 투명 오버레이) -->
-      <button type="button" class="print-hitzone" id="printBtn" aria-label="라벨 출력"></button>
-
-      <!-- 온스크린 키보드 패널 (기능키줄 + 자모/기호 그리드 + 하단줄) -->
-      <div class="machine-keyboard" id="keyboard">
-        <!-- JS가 기능키줄 + 두벌식/기호 그리드 + 하단줄을 렌더링 -->
-      </div>
-
     </div>
 
     <!-- 실제 키보드 입력을 받는 숨김 input (네이티브 IME 조합용) -->
@@ -55,9 +78,8 @@
     >
   </div>
 
-  <!-- 기기 밖: PNG 저장 버튼 / 음소거 토글만 남김 -->
+  <!-- 기기 밖: 출력 후에만 PNG 저장 버튼 노출 -->
   <div class="page-actions">
-    <button type="button" class="mute-btn" id="muteBtn" aria-pressed="false" aria-label="음소거">소리 켜짐</button>
     <button type="button" class="label-download-btn" id="labelDownloadBtn" hidden>PNG 저장</button>
   </div>
 
@@ -132,14 +154,6 @@
       <circle cx="15" cy="15.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
     </g>
   </defs>
-</svg>
-
-<!-- 라벨 종이 그레인 텍스처용 SVG 필터 (화면 표시용, Canvas는 render.js에서 별도 오프스크린 노이즈 생성) -->
-<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
-  <filter id="paperGrain">
-    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="noise"/>
-    <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0"/>
-  </filter>
 </svg>
 
 <script src="js/hangul.js"></script>
