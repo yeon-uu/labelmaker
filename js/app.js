@@ -162,33 +162,55 @@
   const R5 = buildR5();
 
   // ---- 이모티콘 레이어 ----
-  // assets/emoji_trim.png는 kr_trim.png와 동일 챠시(오벌/LCD/핑크버튼/기능키 위치 동일,
-  // 트림 크기 1095x792 vs 1096x792 — 1px 오차, 검산 결과 R1~R5 좌표 100% 재사용 가능:
-  // 각 히트존 rect 3x3=9포인트 다수결로 "키캡 위(데크색 아님)" 판정, KR 좌표 그대로 30/30 통과.
-  // 따라서 R2/R3/R4는 KR과 동일한 rect(R2_KR_RECTS/R3_KR_RECTS/R4_KR_RECTS)를 그대로 쓰고,
-  // key만 이모지 삽입 동작으로 교체한다.
-  // R2_KR_RECTS(10칸)에 각 박스 좌우 경계선을 그려 실제 키캡과 1:1 대조한 결과(육안 확인):
-  // 1곰 2고양이 3토끼 4딸기 5꽃 6하트 7반짝이(큰단독) 8반짝이(큰+작은쌍) 9리본 10이모티콘.
-  // 반짝이는 2종(단독/쌍)뿐이고 9번째는 반짝이가 아니라 리본이다(이전 버전이 반짝이를
-  // 3칸으로 잘못 세어 리본 자리를 반짝이로, 리본을 emoji 토글 자리로 밀어넣는 바람에
-  // 리본 키 자체가 증발했던 버그를 이번에 바로잡았다).
-  // 스프라이트 내용(파일명과 내부 도형이 불일치, 육안 확인 완료):
-  //   sparkle_pair.png = 큰다이아 단독 모양, sparkle_small.png = 큰+작은 쌍 모양,
-  //   sparkle_big.png = 큰+작은 2개(3점 조합) — 이 키보드 어디에도 없는 모양이라 미사용.
-  const R2_EMOJI_KEYS = ['emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:flower', 'emoji:heart', 'emoji:sparkle_pair', 'emoji:sparkle_small', 'emoji:ribbon', 'emoji'];
-  const R2_EMOJI = buildRow(R2_KR_RECTS, R2_KR[0].rect.top, R2_KR[0].rect.height, R2_EMOJI_KEYS);
+  // assets/emoji_trim.png는 kr_trim.png와 세로 그리드(R1~R5의 top/height)는 동일 챠시이나,
+  // R2/R3/R4의 "칸 개수·폭"은 한글 자판과 다르다(예: 한글 R2=9자모+토글=10칸인데 이모지
+  // R2=10이모지+토글=11칸). 2026-07-05(10차) 세션은 이 칸 수 차이를 검증하지 않고 KR 좌표를
+  // 그대로 재사용해 히트존이 실제 이모지 키 위에 얹히지 않는 버그가 있었다.
+  // 이번 세션에서 emoji_trim.png 자체를 Python PIL로 독립 재측정했다(kr 좌표 미사용):
+  // 크림 키캡 vs 노란 데크 색 전환을 열 방향으로 스캔해 각 행의 실제 칸 개수/폭/중심을 %로
+  // 산출(측정 스크립트는 1회성 도구라 저장하지 않음, 수치는 docs/DEVLOG.md 참고).
+  // 세로(top/height)는 emoji_trim에서도 다수결 재스캔으로 kr_trim과 사실상 동일함을 재확인
+  // (R2/R3/R4 행 경계 오차 0.3% 이내) — 따라서 top/height만 kr_trim 값을 그대로 쓰고,
+  // 가로 rect(개수·폭)는 아래처럼 emoji_trim 전용 값으로 교체했다.
+  // 각 키에 그려진 그림은 스프라이트 17개와 정규화 비교(크롭 vs 스프라이트 나란히 시각 대조)로
+  // 확정했다 — 순서 가정 없이 이미지에서 직접 도출.
+  // R2(11칸, emoji_trim 실측): 곰·고양이·토끼·딸기·꽃·하트·반짝이(다이아단독=sparkle_pair)·
+  //   반짝이(다이아+작은쌍=sparkle_small)·반짝이(별4점=sparkle_big)·리본·이모티콘(복귀).
+  const R2_EMOJI_RECTS = [
+    { left: 6.484, width: 7.123 }, { left: 15.068, width: 6.941 }, { left: 23.470, width: 6.849 },
+    { left: 31.872, width: 6.758 }, { left: 40.183, width: 6.758 }, { left: 48.402, width: 6.667 },
+    { left: 56.530, width: 6.393 }, { left: 64.384, width: 5.936 }, { left: 71.689, width: 6.210 },
+    { left: 79.269, width: 6.027 }, { left: 86.667, width: 6.941 }
+  ];
+  const R2_EMOJI_KEYS = ['emoji:bear', 'emoji:cat', 'emoji:rabbit', 'emoji:strawberry', 'emoji:flower', 'emoji:heart', 'emoji:sparkle_pair', 'emoji:sparkle_small', 'emoji:sparkle_big', 'emoji:ribbon', 'emoji'];
+  const R2_EMOJI = buildRow(R2_EMOJI_RECTS, R2_KR[0].rect.top, R2_KR[0].rect.height, R2_EMOJI_KEYS);
 
+  // R3(10칸, emoji_trim 실측): 머그컵·구름·음표·달·스마일·별·반짝이(다이아+작은쌍=sparkle_small)·
+  //   하트외곽선·빈칸(사진에 아이콘 없음)·BS.
+  const R3_EMOJI_RECTS = [
+    { left: 6.484, width: 7.489 }, { left: 15.616, width: 7.763 }, { left: 25.023, width: 7.580 },
+    { left: 34.338, width: 7.945 }, { left: 43.927, width: 7.945 }, { left: 53.607, width: 7.397 },
+    { left: 62.648, width: 6.758 }, { left: 71.050, width: 6.667 }, { left: 77.900, width: 8.402 },
+    { left: 86.393, width: 7.215 }
+  ];
   const R3_EMOJI_KEYS = ['emoji:mug', 'emoji:cloud', 'emoji:note', 'emoji:moon', 'emoji:smiley', 'emoji:star', 'emoji:sparkle_small', 'emoji:heart_outline', null, 'backspace'];
-  const R3_EMOJI = buildRow(R3_KR_RECTS, R3_KR[0].rect.top, R3_KR[0].rect.height, R3_EMOJI_KEYS);
+  const R3_EMOJI = buildRow(R3_EMOJI_RECTS, R3_KR[0].rect.top, R3_KR[0].rect.height, R3_EMOJI_KEYS);
   // 9번째 칸(null)은 사진에도 아이콘이 없는 빈 키캡 — 비활성 처리(isKeyDisabled에서 처리).
 
-  // R4 이모지 8종은 전부 R2/R3와 중복되는 이모지라, 삽입 시 "미니" 사이즈로 구분한다
-  // (사용자 요청). 키 식별자에 ':mini' 접미사를 붙여 handleKeyPress가 size:'mini' 토큰을
-  // 삽입하도록 표시만 하고, 좌표/렌더 구조는 R2/R3와 동일하게 재사용한다.
-  const R4_EMOJI_KEYS = ['shift', 'emoji:sparkle_small:mini', 'emoji:ribbon:mini', 'emoji:flower:mini', 'emoji:bear:mini', 'emoji:cat:mini', 'emoji:rabbit:mini', 'emoji:strawberry:mini', 'emoji:cloud:mini', '.'];
-  const R4_EMOJI = buildRow(R4_KR_RECTS, R4_KR[0].rect.top, R4_KR[0].rect.height, R4_EMOJI_KEYS);
-  // Shift는 이 레이어에 의미가 없어 비활성(isKeyDisabled) 처리. 콤마 자리는 사진에 구름
-  // 아이콘이 그려져 있어 emoji:cloud로 매핑, 마침표 자리는 사진 그대로 마침표 문자 유지.
+  // R4(11칸, emoji_trim 실측): Shift·반짝이(별4점=sparkle_big)·리본·꽃·곰·고양이·토끼·딸기·구름·,·.
+  // 8종 전부 R2/R3와 중복되는 이모지라, 삽입 시 "미니" 사이즈로 구분한다(사용자 요청).
+  // 키 식별자에 ':mini' 접미사를 붙여 handleKeyPress가 size:'mini' 토큰을 삽입하도록 표시.
+  const R4_EMOJI_RECTS = [
+    { left: 5.114, width: 11.050 }, { left: 16.256, width: 6.301 }, { left: 23.836, width: 6.301 },
+    { left: 31.507, width: 6.119 }, { left: 39.087, width: 6.119 }, { left: 46.575, width: 6.210 },
+    { left: 54.155, width: 6.210 }, { left: 61.735, width: 6.210 }, { left: 69.315, width: 6.301 },
+    { left: 77.169, width: 7.489 }, { left: 86.119, width: 7.489 }
+  ];
+  const R4_EMOJI_KEYS = ['shift', 'emoji:sparkle_big:mini', 'emoji:ribbon:mini', 'emoji:flower:mini', 'emoji:bear:mini', 'emoji:cat:mini', 'emoji:rabbit:mini', 'emoji:strawberry:mini', 'emoji:cloud:mini', ',', '.'];
+  const R4_EMOJI = buildRow(R4_EMOJI_RECTS, R4_KR[0].rect.top, R4_KR[0].rect.height, R4_EMOJI_KEYS);
+  // Shift는 이 레이어에 의미가 없어 비활성(isKeyDisabled) 처리. 사진 실측 결과 R4는 이모지
+  // 8칸 뒤에 콤마·마침표 키가 별도로 존재한다(기존 코드가 콤마 칸을 구름으로 잘못 흡수했던
+  // 것과 달리, 실제로는 구름 이모지와 콤마가 각각 별개의 칸).
 
   // 이모지 스프라이트 id -> 파일 경로. assets/emoji-sheet.png(흰 배경, 검정 픽셀 이모지)를
   // PIL 연결요소 검출로 슬라이스한 17개 투명 PNG(잉크색 #3A3330 틴트 적용 완료).
